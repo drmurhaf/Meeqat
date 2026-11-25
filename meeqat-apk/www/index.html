@@ -32,7 +32,7 @@ header h1{font-size:20px;margin:0}header small{color:var(--mut);display:block;fo
 .p.lock{opacity:.55;cursor:default}
 .p .ic{flex:none;width:42px;height:42px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1}
 .p.k .ic{background:rgba(var(--cr),.2)}
-.p.sr{cursor:default;background:var(--card)}
+.p.sr:not(.lock){cursor:pointer}.p.sr{cursor:default;background:var(--card)}
 .p.sr .n small{color:var(--mut)}
 .p .n{flex:1}.p .n b{font-size:17px;display:block}.p .n small{color:var(--mut);font-size:12.5px}
 .p .t{font-variant-numeric:tabular-nums;font-size:15px;color:var(--mut);direction:ltr}
@@ -73,7 +73,7 @@ input,select{background:var(--card);color:var(--tx);border:1px solid var(--line)
 .sw.on{background:var(--ac)}.sw.on::after{inset-inline-start:25px}
 .toast{color:var(--mut);font-size:12.5px;margin-top:6px;min-height:18px}
 /* ألوان حالة الصلاة */
-.c-m10{--cr:22,163,74}.c-m5{--cr:37,99,235}.c-m3{--cr:168,85,247}.c-late{--cr:249,115,22}.c-qada{--cr:234,179,8}.c-miss{--cr:220,38,38}
+.c-m10{--cr:22,163,74}.c-m5{--cr:37,99,235}.c-m3{--cr:168,85,247}.c-late{--cr:249,115,22}.c-qada{--cr:234,179,8}.c-x{--cr:195,154,67}.c-miss{--cr:220,38,38}
 .p.k{background:rgba(var(--cr),.14);border-color:rgba(var(--cr),.55);border-inline-start:5px solid rgb(var(--cr))}
 .p.k .pt{background:rgb(var(--cr));color:#fff;border:0}
 .p.k.c-qada .pt{color:#1f2937}
@@ -239,8 +239,8 @@ const SH={m10:"جماعة في المسجد",m5:"جماعة (بيت/عمل) أو
 const pt=v=>'<em style="font-style:normal;font-weight:700;color:var(--'+(v<0?"bad":"ac")+')">'+(v>0?"+":"")+v+'</em>';
 const XB='<button class="xb" id="xc" aria-label="إغلاق"><svg viewBox="0 0 30 20"><path d="M5 6l10 9 10-9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
 const TYPES=["m10","m5","m3","late","qada"];
-function segs(keys){const g={pos:0,miss:0};TYPES.forEach(t=>g[t]=0);keys.forEach(k=>{const l=S.log[k]||{};for(const n of NAMES){const r=l[n[0]];if(!r)continue;const t=(r.o=="miss"&&r.q)?"qada":r.o;if(t=="miss"){g.miss++;continue}const v=ptsOf(r);g[t]=(g[t]||0)+v;g.pos+=v}});return g}
-function stk(g,mx){const sc=100/mx;let h="";TYPES.forEach(t=>{if(g[t]>0)h+='<s class="c-'+t+'" style="height:'+Math.max(3,Math.round(g[t]*sc))+'px"></s>'});if(g.miss)h+='<s class="c-miss" style="height:4px"></s>';return '<i>'+h+'</i>'}
+function segs(keys){const g={pos:0,miss:0};TYPES.forEach(t=>g[t]=0);keys.forEach(k=>{const l=S.log[k]||{};for(const n of NAMES){const r=l[n[0]];if(!r)continue;const t=(r.o=="miss"&&r.q)?"qada":r.o;if(t=="miss"){g.miss++;continue}const v=ptsOf(r);g[t]=(g[t]||0)+v;g.pos+=v}if(dhOn(k)){g.x=(g.x||0)+DUHA_PTS;g.pos+=DUHA_PTS}});return g}
+function stk(g,mx){const sc=100/mx;let h="";TYPES.forEach(t=>{if(g[t]>0)h+='<s class="c-'+t+'" style="height:'+Math.max(3,Math.round(g[t]*sc))+'px"></s>'});if(g.x>0)h+='<s class="c-x" style="height:'+Math.max(3,Math.round(g.x*sc))+'px"></s>';if(g.miss)h+='<s class="c-miss" style="height:4px"></s>';return '<i>'+h+'</i>'}
 function hist(){
   const now=new Date(),R=S.range||"week",DAY=864e5,ks=Object.keys(S.log),bars=[];
   const tabs=[["week","أسبوع"],["month","شهر"],["year","سنة"],["all","كل الوقت"]];
@@ -261,7 +261,7 @@ function hist(){
     const mx=Math.max(1,...bars.map(b=>b.g.pos));bars.forEach(b=>b.mx=mx);
     sk=R=="all"?"":key(new Date(y,m-n+1,1));
   }
-  $("ht").textContent=title;$("lg").innerHTML=[["m10","المسجد"],["m5","جماعة"],["m3","منفرداً"],["late","متأخراً"],["qada","قضاء"],["miss","فائتة"]].map(x=>'<span class="c-'+x[0]+'"><b></b>'+x[1]+'</span>').join("");
+  $("ht").textContent=title;$("lg").innerHTML=[["m10","المسجد"],["m5","جماعة"],["m3","منفرداً"],["late","متأخراً"],["qada","قضاء"],["miss","فائتة"],["x","الضحى"]].map(x=>'<span class="c-'+x[0]+'"><b></b>'+x[1]+'</span>').join("");
   const el=$("wk");el.className="wk"+(bars.length>12?" dense":"");
   el.innerHTML=bars.map(b=>'<div '+(b.f?'':'data-k="'+b.k+'"')+' class="'+(b.t?"today":"")+(b.f?" fut":"")+'"><span>'+b.v+'</span>'+stk(b.g,b.mx)+b.l+'</div>').join("");
   el.scrollLeft=(R=="week"||R=="month")?0:-1e6;
@@ -278,15 +278,15 @@ function stats(){
   el.innerHTML='<div class="hc" title="نقاط الأسبوع"><small>الأسبوع</small><b class="'+(w<0?"neg":"")+'">'+w+'</b></div><div class="hc m" title="نقاط الشهر"><small>الشهر</small><b class="'+(mo<0?"neg":"")+'">'+mo+'</b></div>'}
 function dayDetail(k,back){
   const l=S.log[k]||{},p=k.split("-").map(Number),dt=new Date(p[0],p[1]-1,p[2]);
-  const rows=NAMES.map(n=>{const r=l[n[0]];if(!r)return '<div class="dr"><b>'+n[1]+'</b><span>لم تُسجَّل</span></div>';const o=OPTS.find(x=>x[0]==r.o);return '<div class="dr k c-'+(r.o=="miss"&&r.q?"qada":r.o)+'"><b>'+n[1]+'</b><span>'+(o?o[1]:"")+(r.s?" + سنة":"")+qnote(r)+'</span>'+pt(ptsOf(r))+'</div>'}).join("");
+  const rows=NAMES.map(n=>{const r=l[n[0]];if(!r)return '<div class="dr"><b>'+n[1]+'</b><span>لم تُسجَّل</span></div>';const o=OPTS.find(x=>x[0]==r.o);return '<div class="dr k c-'+(r.o=="miss"&&r.q?"qada":r.o)+'"><b>'+n[1]+'</b><span>'+(o?o[1]:"")+(r.s?" + سنة":"")+(r.w?" + وتر":"")+qnote(r)+'</span>'+pt(ptsOf(r))+'</div>'}).join("")+(dhOn(k)?'<div class="dr k c-m10"><b>صلاة الضحى</b><span>تم أداؤها</span>'+pt(DUHA_PTS)+'</div>':"");
   openSheet(XB+'<div class="dh"><h2>'+dt.toLocaleDateString("ar-u-nu-latn",{weekday:"long",day:"numeric",month:"long",year:"numeric"})+'</h2><div class="dpt'+(score(k)<0?' neg':'')+'"><b>'+score(k)+'</b><small>نقطة</small></div></div>'+rows+(back?'<button class="btn g" id="bk">رجوع</button>':""));
   $("sheet").onclick=ev=>{if(ev.target.closest("#xc")){closeSheet();return}if(back&&ev.target.id=="bk")monthDetail(back)};
 }
 function monthDetail(ym){
   const ks=Object.keys(S.log).filter(k=>k.startsWith(ym)&&Object.keys(S.log[k]||{}).length).sort().reverse();
-  const p=ym.split("-").map(Number),c={};let tot=0,sn=0;
-  ks.forEach(k=>{tot+=score(k);Object.values(S.log[k]).forEach(r=>{c[r.o]=(c[r.o]||0)+1;if(r.s)sn++})});
-  openSheet(XB+'<div class="dh"><h2>'+new Date(p[0],p[1]-1,1).toLocaleDateString("ar-u-nu-latn",{month:"long",year:"numeric"})+'</h2><div class="dpt'+(tot<0?' neg':'')+'"><b>'+tot+'</b><small>نقطة</small></div></div><div class="s" style="margin:-4px 0 10px">أيام مسجّلة: '+ks.length+'</div>'+(ks.length?OPTS.filter(o=>c[o[0]]).map(o=>'<div class="dr k c-'+o[0]+'"><b>'+SH[o[0]]+'</b><span>×'+c[o[0]]+'</span></div>').join("")+(sn?'<div class="dr"><b>صلوات السنة</b><span>×'+sn+'</span></div>':"")+'<div class="s" style="margin:12px 0 8px">الأيام (اضغط لعرض التفاصيل)</div>'+ks.map(k=>{const d=new Date(+k.slice(0,4),+k.slice(5,7)-1,+k.slice(8));return '<button class="dr" data-k="'+k+'"><b>'+d.toLocaleDateString("ar-u-nu-latn",{weekday:"long",day:"numeric"})+'</b><span>'+Object.keys(S.log[k]).length+' من 5</span>'+pt(score(k))+'</button>'}).join(""):'<div class="s">لا توجد صلوات مسجّلة في هذا الشهر</div>'));
+  const p=ym.split("-").map(Number),c={};let tot=0,sn=0,wn=0,dn=0;
+  ks.forEach(k=>{tot+=score(k);Object.values(S.log[k]).forEach(r=>{c[r.o]=(c[r.o]||0)+1;if(r.s)sn++;if(r.w)wn++});if(dhOn(k))dn++});
+  openSheet(XB+'<div class="dh"><h2>'+new Date(p[0],p[1]-1,1).toLocaleDateString("ar-u-nu-latn",{month:"long",year:"numeric"})+'</h2><div class="dpt'+(tot<0?' neg':'')+'"><b>'+tot+'</b><small>نقطة</small></div></div><div class="s" style="margin:-4px 0 10px">أيام مسجّلة: '+ks.length+'</div>'+(ks.length?OPTS.filter(o=>c[o[0]]).map(o=>'<div class="dr k c-'+o[0]+'"><b>'+SH[o[0]]+'</b><span>×'+c[o[0]]+'</span></div>').join("")+(sn?'<div class="dr"><b>صلوات السنة</b><span>×'+sn+'</span></div>':"")+(wn?'<div class="dr"><b>صلاة الوتر</b><span>×'+wn+'</span></div>':"")+(dn?'<div class="dr"><b>صلاة الضحى</b><span>×'+dn+'</span></div>':"")+'<div class="s" style="margin:12px 0 8px">الأيام (اضغط لعرض التفاصيل)</div>'+ks.map(k=>{const d=new Date(+k.slice(0,4),+k.slice(5,7)-1,+k.slice(8));return '<button class="dr" data-k="'+k+'"><b>'+d.toLocaleDateString("ar-u-nu-latn",{weekday:"long",day:"numeric"})+'</b><span>'+Object.keys(S.log[k]).length+' من 5</span>'+pt(score(k))+'</button>'}).join(""):'<div class="s">لا توجد صلوات مسجّلة في هذا الشهر</div>'));
   $("sheet").onclick=ev=>{if(ev.target.closest("#xc")){closeSheet();return}const b=ev.target.closest("[data-k]");if(b)dayDetail(b.dataset.k,ym)};
 }
 const fd=k=>{const p=k.split("-").map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString("ar-u-nu-latn",{weekday:"long",day:"numeric",month:"long"})};
@@ -320,10 +320,11 @@ function times(d){
 }
 let T=[],TD="",TN=[],TP=null;
 function ensure(){const now=new Date(),k=key(now);if(k!==TD){TD=k;T=times(now);const tm=new Date(now.getTime()+864e5);TN=times(tm);TP=times(new Date(now.getTime()-864e5))}}
-const score=(k)=>{const l=S.log[k]||{};let s=0;for(const p of NAMES){const r=l[p[0]];if(r)s+=ptsOf(r)}return s};
-const ptsOf=r=>{const o=OPTS.find(x=>x[0]==r.o);return (r.o=="miss"&&r.q?0:(o?o[2]:0))+(r.s?1:0)};
+const score=(k)=>{const l=S.log[k]||{};let s=0;for(const p of NAMES){const r=l[p[0]];if(r)s+=ptsOf(r)}return s+(dhOn(k)?DUHA_PTS:0)};
+const ptsOf=r=>{const o=OPTS.find(x=>x[0]==r.o);return (r.o=="miss"&&r.q?0:(o?o[2]:0))+(r.s?1:0)+(r.w?3:0)};
+const DUHA_PTS=2,dhOn=k=>!!(S.dh&&S.dh[k]);
 
-let HS="",HN="";const prevK=k=>NAMES[(NAMES.findIndex(n=>n[0]==k)+4)%5][0];
+let HS="",HN="",DS=-1;const prevK=k=>NAMES[(NAMES.findIndex(n=>n[0]==k)+4)%5][0];
 function heroScene(k){
   const SC={
     sunrise:{sky:[[0,"#2d4f9a"],[40,"#7fa8dc"],[68,"#f4b6a0"],[88,"#ffcf86"],[100,"#ffe3a0"]],hill:["#7a5a6c","#3d2c3f"]},
@@ -360,8 +361,8 @@ function render(){
   let cur=-1;T.forEach((p,i)=>{if(now>=p.s)cur=i});
   $("list").innerHTML=T.map((p,i)=>{
     const open=now>=p.s,r=log[p.k];let cc="",badge='<span class="pt none">—</span>',sub=open?(i==cur?"الوقت الآن · اضغط للتسجيل":"اضغط للتسجيل"):"لم يحن الوقت بعد";
-    if(r){const v=ptsOf(r),o=OPTS.find(x=>x[0]==r.o);badge='<span class="pt '+(v<0?"neg":"")+'">'+(v>0?"+":"")+v+'</span>';sub=(o?o[1]:"")+(r.s?" + سنة":"")+qnote(r);cc=" k c-"+(r.o=="miss"&&r.q?"qada":r.o)}
-    return '<button class="p '+(i==cur?"cur":"")+(open?"":" lock")+cc+'" data-i="'+i+'"><span class="ic">'+(ICN[p.k]||"🕌")+'</span><div class="n"><b>'+p.n+'</b><small>'+sub+'</small></div><span class="t">'+fmt(p.s)+'</span>'+badge+'</button>'+(i==0?'<div class="p sr'+(now>=p.sr?"":" lock")+'"><span class="ic">🌅</span><div class="n"><b>الشروق</b></div><span class="t">'+fmt(p.sr)+'</span></div>':"")}).join("");
+    if(r){const v=ptsOf(r),o=OPTS.find(x=>x[0]==r.o);badge='<span class="pt '+(v<0?"neg":"")+'">'+(v>0?"+":"")+v+'</span>';sub=(o?o[1]:"")+(r.s?" + سنة":"")+(r.w?" + وتر":"")+qnote(r);cc=" k c-"+(r.o=="miss"&&r.q?"qada":r.o)}
+    return '<button class="p '+(i==cur?"cur":"")+(open?"":" lock")+cc+'" data-i="'+i+'"><span class="ic">'+(ICN[p.k]||"🕌")+'</span><div class="n"><b>'+p.n+'</b><small>'+sub+'</small></div><span class="t">'+fmt(p.s)+'</span>'+badge+'</button>'+(i==0?(()=>{const so=now>=p.sr,dd=dhOn(k),ex=T[1]&&now>=T[1].s,lk=!so||ex;return '<button class="p sr'+(lk?" lock":"")+(dd?" k c-m10":"")+'" data-d="1"><span class="ic">🌅</span><div class="n"><b>الشروق</b><small>'+(dd?"تم أداء صلاة الضحى":!so?"لم يحن الوقت بعد":ex?"فات وقت صلاة الضحى":"اضغط لتسجيل صلاة الضحى (+2)")+'</small></div><span class="t">'+fmt(p.sr)+'</span>'+(dd?'<span class="pt">+2</span>':'<span class="pt none">—</span>')+'</button>'})():"")}).join("");
   const sc=score(k);$("sc").textContent=sc;$("rg").style.strokeDashoffset=238.8*(1-Math.max(0,Math.min(1,sc/55)));
   const nx=T.findIndex(p=>p.s>now);
   const np=nx>=0?T[nx]:TN[0];
@@ -372,7 +373,7 @@ function render(){
 function tick(){
   if(!T.length)return;const now=new Date();
   if(key(now)!==TD){render();return}
-  {const sr=document.querySelector('.p.sr');if(sr)sr.classList.toggle('lock',now<T[0].sr)}
+  {const ds=now<T[0].sr?0:now<T[1].s?1:2;if(ds!==DS){DS=ds;render();return}}
   const nx=T.find(p=>p.s>now),np=nx||TN[0],ms=np.s-now;
   if(np.k!==HN){HN=np.k;$("nn").textContent=np.n;$("nl").textContent="الصلاة القادمة · "+fmt(np.s)}setScene(sceneFor(np,now));
   if(S.notif){T.forEach(p=>{if(!pOn(p.k))return;const k0=key(now),lg=(S.log[k0]||{})[p.k],ev=[];if(S.pre>0)ev.push(["b",-S.pre,"بقي "+S.pre+" دقيقة على صلاة "+p.n,"استعدّ للصلاة 🌙"]);if(0)ev.push(["a",S.post,"مضى "+S.post+" دقيقة على صلاة "+p.n,"إن صلّيتها سجّلها الآن، وإلا فبادر بأدائها 🤍"]);ev.forEach(x=>{const id=k0+p.k+x[0],df=now-(p.s.getTime()+x[1]*60000);if(df>=0&&df<90000&&!S.sent[id]){S.sent[id]=1;save();notify(x[2],{body:x[3],silent:true});playSound(S.sndPre,"sndpre")}})})}
@@ -388,15 +389,18 @@ function closeSheet(){$("ov").classList.remove("on")}
 $("ov").addEventListener("click",e=>{if(e.target.id=="ov")closeSheet()});
 
 $("list").addEventListener("click",e=>{
+  const sb=e.target.closest(".p.sr");
+  if(sb){ensure();const n=new Date();if(T[0]&&T[1]&&n>=T[0].sr&&n<T[1].s){const k0=key(n);S.dh=S.dh||{};if(S.dh[k0])delete S.dh[k0];else S.dh[k0]=1;save();render()}return}
   const b=e.target.closest(".p");if(!b||b.dataset.i===undefined)return;const p=T[+b.dataset.i];if(new Date()<p.s)return;
   const k=key(new Date()),r=(S.log[k]||{})[p.k]||{o:null,s:0};
-  let sel=r.o,sn=r.s;
-  const draw=()=>{openSheet('<h2>صلاة '+p.n+'</h2><div class="s">'+fmt(p.s)+' · كيف أدّيتها؟</div>'+OPTS.map(o=>'<button class="o c-'+o[0]+' '+(o[2]<0?"bad ":"")+(sel==o[0]?"sel":"")+'" data-o="'+o[0]+'"><span>'+o[1]+'</span><em>'+(o[2]>0?"+":"")+o[2]+'</em></button>').join("")+'<div class="row"><label>أضفت صلاة السنة (+١ نقطة)</label><button class="sw '+(sn?"on":"")+'" id="sn"></button></div><button class="btn" id="ok">حفظ</button>'+(r.o?'<button class="btn g" id="clr">مسح التسجيل</button>':""))};
+  let sel=r.o,sn=r.s,wt=r.w||0;
+  const draw=()=>{openSheet('<h2>صلاة '+p.n+'</h2><div class="s">'+fmt(p.s)+' · كيف أدّيتها؟</div>'+OPTS.map(o=>'<button class="o c-'+o[0]+' '+(o[2]<0?"bad ":"")+(sel==o[0]?"sel":"")+'" data-o="'+o[0]+'"><span>'+o[1]+'</span><em>'+(o[2]>0?"+":"")+o[2]+'</em></button>').join("")+'<div class="row"><label>أضفت صلاة السنة (+١ نقطة)</label><button class="sw '+(sn?"on":"")+'" id="sn"></button></div>'+(p.k=="isha"?'<div class="row"><label>أضفت صلاة الوتر (+٣ نقاط)</label><button class="sw '+(wt?"on":"")+'" id="wt"></button></div>':"")+'<button class="btn" id="ok">حفظ</button>'+(r.o?'<button class="btn g" id="clr">مسح التسجيل</button>':""))};
   draw();
   $("sheet").onclick=ev=>{
     const o=ev.target.closest(".o");if(o){sel=o.dataset.o;draw();return}
     if(ev.target.id=="sn"){sn=sn?0:1;draw();return}
-    if(ev.target.id=="ok"&&sel){S.log[k]=S.log[k]||{};S.log[k][p.k]={o:sel,s:sn};save();closeSheet();render()}
+    if(ev.target.id=="wt"){wt=wt?0:1;draw();return}
+    if(ev.target.id=="ok"&&sel){S.log[k]=S.log[k]||{};S.log[k][p.k]={o:sel,s:sn,w:p.k=="isha"?wt:0};save();closeSheet();render()}
     if(ev.target.id=="clr"){delete S.log[k][p.k];save();closeSheet();render()}
   };
 });
