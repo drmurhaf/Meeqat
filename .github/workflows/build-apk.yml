@@ -19,26 +19,527 @@ jobs:
       - run: npx cap add android
       - run: npx capacitor-assets generate --android
       - run: npx cap sync android
-      - name: Allow autoplay of adhan sound
+      - name: Native adhan (Java sources)
         run: |
-          mkdir -p android/app/src/main/java/com/murhaf/meeqat
-          cat > android/app/src/main/java/com/murhaf/meeqat/MainActivity.java <<'JAVA'
+          D=android/app/src/main/java/com/murhaf/meeqat
+          mkdir -p $D
+          cat > $D/MainActivity.java <<'JAVA_0'
           package com.murhaf.meeqat;
 
+          import android.content.Intent;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.WindowManager;
           import com.getcapacitor.BridgeActivity;
 
           public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  registerPlugin(AdhanPlugin.class);
+                  super.onCreate(savedInstanceState);
+                  applyAdhanFlags(getIntent());
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  setIntent(intent);
+                  applyAdhanFlags(intent);
+              }
+
               @Override
               public void onStart() {
                   super.onStart();
                   getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
               }
+
+              private void applyAdhanFlags(Intent intent) {
+                  if (intent != null && intent.getBooleanExtra("adhan", false)) {
+                      if (Build.VERSION.SDK_INT >= 27) {
+                          setShowWhenLocked(true);
+                          setTurnScreenOn(true);
+                      } else {
+                          getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                                  | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+                      }
+                      getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                  }
+              }
           }
-          JAVA
-      - name: Location permission
+          JAVA_0
+          cat > $D/AdhanScheduler.java <<'JAVA_1'
+          package com.murhaf.meeqat;
+
+          import android.app.AlarmManager;
+          import android.app.PendingIntent;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.os.Build;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          final class AdhanScheduler {
+              static final String PREF = "meeqat_adhan";
+              static final String ACTION = "com.murhaf.meeqat.ADHAN";
+
+              private AdhanScheduler() {}
+
+              static void save(Context c, String json) {
+                  c.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("items", json).apply();
+              }
+
+              static boolean canExact(Context c) {
+                  if (Build.VERSION.SDK_INT >= 31) {
+                      AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+                      return am.canScheduleExactAlarms();
+                  }
+                  return true;
+              }
+
+              private static int flags() {
+                  int f = PendingIntent.FLAG_UPDATE_CURRENT;
+                  if (Build.VERSION.SDK_INT >= 23) f |= PendingIntent.FLAG_IMMUTABLE;
+                  return f;
+              }
+
+              private static Intent baseIntent(Context c) {
+                  Intent in = new Intent(c, AdhanReceiver.class);
+                  in.setAction(ACTION);
+                  return in;
+              }
+
+              static void cancelAll(Context c) {
+                  try {
+                      SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+                      JSONArray codes = new JSONArray(sp.getString("codes", "[]"));
+                      AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+                      for (int i = 0; i < codes.length(); i++) {
+                          try {
+                              PendingIntent pi = PendingIntent.getBroadcast(c, codes.getInt(i), baseIntent(c), flags());
+                              am.cancel(pi);
+                          } catch (Exception e) { }
+                      }
+                      sp.edit().putString("codes", "[]").apply();
+                  } catch (Exception e) { }
+              }
+
+              static int scheduleAll(Context c) {
+                  cancelAll(c);
+                  int n = 0;
+                  try {
+                      SharedPreferences sp = c.getSharedPreferences(PREF, Context.MODE_PRIVATE);
+                      JSONArray items = new JSONArray(sp.getString("items", "[]"));
+                      AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+                      long now = System.currentTimeMillis();
+                      JSONArray codes = new JSONArray();
+                      for (int i = 0; i < items.length(); i++) {
+                          try {
+                              JSONObject o = items.getJSONObject(i);
+                              long t = o.getLong("t");
+                              if (t <= now + 1000) continue;
+                              int code = (int) (t / 60000L);
+                              Intent in = baseIntent(c);
+                              in.putExtra("key", o.optString("key"));
+                              in.putExtra("name", o.optString("name"));
+                              in.putExtra("sound", o.optString("sound"));
+                              PendingIntent pi = PendingIntent.getBroadcast(c, code, in, flags());
+                              PendingIntent show = PendingIntent.getActivity(c, code, new Intent(c, MainActivity.class), flags());
+                              am.setAlarmClock(new AlarmManager.AlarmClockInfo(t, show), pi);
+                              codes.put(code);
+                              n++;
+                          } catch (Exception e) { }
+                      }
+                      sp.edit().putString("codes", codes.toString()).apply();
+                  } catch (Exception e) { }
+                  return n;
+              }
+          }
+          JAVA_1
+          cat > $D/AdhanReceiver.java <<'JAVA_2'
+          package com.murhaf.meeqat;
+
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Build;
+
+          public class AdhanReceiver extends BroadcastReceiver {
+              @Override
+              public void onReceive(Context context, Intent intent) {
+                  try {
+                      Intent s = new Intent(context, AdhanService.class);
+                      if (intent.getExtras() != null) s.putExtras(intent.getExtras());
+                      if (Build.VERSION.SDK_INT >= 26) {
+                          context.startForegroundService(s);
+                      } else {
+                          context.startService(s);
+                      }
+                  } catch (Exception e) { }
+              }
+          }
+          JAVA_2
+          cat > $D/BootReceiver.java <<'JAVA_3'
+          package com.murhaf.meeqat;
+
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+
+          public class BootReceiver extends BroadcastReceiver {
+              @Override
+              public void onReceive(Context context, Intent intent) {
+                  try {
+                      AdhanScheduler.scheduleAll(context);
+                  } catch (Exception e) { }
+              }
+          }
+          JAVA_3
+          cat > $D/AdhanService.java <<'JAVA_4'
+          package com.murhaf.meeqat;
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.pm.ServiceInfo;
+          import android.content.res.AssetFileDescriptor;
+          import android.media.AudioAttributes;
+          import android.media.MediaPlayer;
+          import android.media.RingtoneManager;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.IBinder;
+          import android.os.PowerManager;
+          import android.provider.Settings;
+          import androidx.core.app.NotificationCompat;
+
+          public class AdhanService extends Service {
+              public static volatile boolean playing = false;
+              public static volatile String curKey = "";
+              private static final String CH = "meeqat_adhan";
+              private static final int NID = 4711;
+              private MediaPlayer mp;
+              private PowerManager.WakeLock wl;
+
+              @Override
+              public IBinder onBind(Intent intent) {
+                  return null;
+              }
+
+              public static void stopNow(Context c) {
+                  try {
+                      Intent s = new Intent(c, AdhanService.class);
+                      s.setAction("STOP");
+                      c.startService(s);
+                  } catch (Exception e) { }
+              }
+
+              @Override
+              public int onStartCommand(Intent i, int flags, int startId) {
+                  if (i != null && "STOP".equals(i.getAction())) {
+                      stopAll();
+                      return START_NOT_STICKY;
+                  }
+                  if (i == null) {
+                      stopSelf();
+                      return START_NOT_STICKY;
+                  }
+                  String key = i.getStringExtra("key");
+                  String name = i.getStringExtra("name");
+                  String sound = i.getStringExtra("sound");
+                  if (key == null) key = "";
+                  if (name == null) name = "";
+                  if (sound == null) sound = "";
+
+                  makeChannel();
+                  Intent open = new Intent(this, MainActivity.class);
+                  open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  open.putExtra("adhan", true);
+                  open.putExtra("key", key);
+                  int imm = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
+                  PendingIntent pi = PendingIntent.getActivity(this, 11, open, PendingIntent.FLAG_UPDATE_CURRENT | imm);
+                  Intent stop = new Intent(this, AdhanService.class);
+                  stop.setAction("STOP");
+                  PendingIntent sp = PendingIntent.getService(this, 12, stop, PendingIntent.FLAG_UPDATE_CURRENT | imm);
+
+                  Notification n = new NotificationCompat.Builder(this, CH)
+                          .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                          .setContentTitle("حان وقت صلاة " + name)
+                          .setContentText("ميقات")
+                          .setCategory(NotificationCompat.CATEGORY_ALARM)
+                          .setPriority(NotificationCompat.PRIORITY_MAX)
+                          .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                          .setOngoing(true)
+                          .setContentIntent(pi)
+                          .setFullScreenIntent(pi, true)
+                          .addAction(0, "إيقاف الأذان", sp)
+                          .build();
+                  try {
+                      if (Build.VERSION.SDK_INT >= 29) {
+                          startForeground(NID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+                      } else {
+                          startForeground(NID, n);
+                      }
+                  } catch (Exception e) { }
+
+                  try {
+                      PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                      if (wl == null) wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "meeqat:adhan");
+                      if (!wl.isHeld()) wl.acquire(15 * 60 * 1000L);
+                  } catch (Exception e) { }
+
+                  curKey = key;
+                  play(sound);
+
+                  try {
+                      if (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)) {
+                          startActivity(open);
+                      }
+                  } catch (Exception e) { }
+                  return START_NOT_STICKY;
+              }
+
+              private void makeChannel() {
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm.getNotificationChannel(CH) == null) {
+                          NotificationChannel ch = new NotificationChannel(CH, "الأذان", NotificationManager.IMPORTANCE_HIGH);
+                          ch.setSound(null, null);
+                          ch.enableVibration(true);
+                          ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+                          nm.createNotificationChannel(ch);
+                      }
+                  }
+              }
+
+              private void play(String sound) {
+                  stopPlayer();
+                  try {
+                      mp = new MediaPlayer();
+                      mp.setAudioAttributes(new AudioAttributes.Builder()
+                              .setUsage(AudioAttributes.USAGE_ALARM)
+                              .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                              .build());
+                      int res = 0;
+                      if (sound.startsWith("a_")) {
+                          res = getResources().getIdentifier(sound, "raw", getPackageName());
+                      }
+                      if (res != 0) {
+                          AssetFileDescriptor afd = getResources().openRawResourceFd(res);
+                          mp.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+                          afd.close();
+                      } else {
+                          Uri u = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                          mp.setDataSource(this, u);
+                      }
+                      mp.setOnCompletionListener(m -> stopAll());
+                      mp.setOnErrorListener((m, what, extra) -> {
+                          stopAll();
+                          return true;
+                      });
+                      mp.prepare();
+                      mp.start();
+                      playing = true;
+                  } catch (Exception e) {
+                      stopAll();
+                  }
+              }
+
+              private void stopPlayer() {
+                  try {
+                      if (mp != null) {
+                          try { mp.stop(); } catch (Exception e) { }
+                          mp.release();
+                      }
+                  } catch (Exception e) { }
+                  mp = null;
+              }
+
+              private void stopAll() {
+                  playing = false;
+                  curKey = "";
+                  stopPlayer();
+                  try {
+                      if (wl != null && wl.isHeld()) wl.release();
+                  } catch (Exception e) { }
+                  try {
+                      if (Build.VERSION.SDK_INT >= 24) {
+                          stopForeground(Service.STOP_FOREGROUND_REMOVE);
+                      } else {
+                          stopForeground(true);
+                      }
+                  } catch (Exception e) { }
+                  stopSelf();
+              }
+
+              @Override
+              public void onDestroy() {
+                  playing = false;
+                  curKey = "";
+                  stopPlayer();
+                  try {
+                      if (wl != null && wl.isHeld()) wl.release();
+                  } catch (Exception e) { }
+                  super.onDestroy();
+              }
+          }
+          JAVA_4
+          cat > $D/AdhanPlugin.java <<'JAVA_5'
+          package com.murhaf.meeqat;
+
+          import android.Manifest;
+          import android.app.NotificationManager;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.PowerManager;
+          import android.provider.Settings;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.app.NotificationManagerCompat;
+          import com.getcapacitor.JSArray;
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          @CapacitorPlugin(name = "Adhan")
+          public class AdhanPlugin extends Plugin {
+
+              @PluginMethod
+              public void schedule(PluginCall call) {
+                  try {
+                      JSArray items = call.getArray("items");
+                      AdhanScheduler.save(getContext(), items == null ? "[]" : items.toString());
+                      int n = AdhanScheduler.scheduleAll(getContext());
+                      JSObject r = new JSObject();
+                      r.put("scheduled", n);
+                      r.put("exact", AdhanScheduler.canExact(getContext()));
+                      call.resolve(r);
+                  } catch (Exception e) {
+                      call.reject(String.valueOf(e.getMessage()));
+                  }
+              }
+
+              @PluginMethod
+              public void state(PluginCall call) {
+                  JSObject r = new JSObject();
+                  r.put("playing", AdhanService.playing);
+                  r.put("key", AdhanService.curKey);
+                  call.resolve(r);
+              }
+
+              @PluginMethod
+              public void stop(PluginCall call) {
+                  AdhanService.stopNow(getContext());
+                  call.resolve();
+              }
+
+              @PluginMethod
+              public void status(PluginCall call) {
+                  Context c = getContext();
+                  JSObject r = new JSObject();
+                  r.put("notif", NotificationManagerCompat.from(c).areNotificationsEnabled());
+                  r.put("exact", AdhanScheduler.canExact(c));
+                  r.put("overlay", Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(c));
+                  boolean fs = true;
+                  if (Build.VERSION.SDK_INT >= 34) {
+                      NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+                      fs = nm.canUseFullScreenIntent();
+                  }
+                  r.put("fullScreen", fs);
+                  boolean bat = true;
+                  if (Build.VERSION.SDK_INT >= 23) {
+                      PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+                      bat = pm.isIgnoringBatteryOptimizations(c.getPackageName());
+                  }
+                  r.put("battery", bat);
+                  call.resolve(r);
+              }
+
+              @PluginMethod
+              public void openSettings(PluginCall call) {
+                  String type = call.getString("type", "");
+                  String pkg = getContext().getPackageName();
+                  try {
+                      Intent in = null;
+                      if ("overlay".equals(type)) {
+                          in = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + pkg));
+                      } else if ("exact".equals(type)) {
+                          if (Build.VERSION.SDK_INT >= 31) {
+                              in = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + pkg));
+                          }
+                      } else if ("fullscreen".equals(type)) {
+                          if (Build.VERSION.SDK_INT >= 34) {
+                              in = new Intent("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT", Uri.parse("package:" + pkg));
+                          }
+                      } else if ("battery".equals(type)) {
+                          in = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + pkg));
+                      } else if ("notif".equals(type)) {
+                          if (Build.VERSION.SDK_INT >= 33) {
+                              ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.POST_NOTIFICATIONS}, 4711);
+                          } else {
+                              in = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                              in.putExtra(Settings.EXTRA_APP_PACKAGE, pkg);
+                          }
+                      }
+                      if (in != null) getActivity().startActivity(in);
+                      call.resolve();
+                  } catch (Exception e) {
+                      try {
+                          Intent d = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg));
+                          getActivity().startActivity(d);
+                      } catch (Exception e2) { }
+                      call.resolve();
+                  }
+              }
+          }
+          JAVA_5
+      - name: Android manifest (permissions, receivers, service)
         run: |
-          sed -i 's#<application#<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n    <application#' android/app/src/main/AndroidManifest.xml
-          grep -n "LOCATION" android/app/src/main/AndroidManifest.xml
+          python3 - <<'PY'
+          p='android/app/src/main/AndroidManifest.xml'
+          s=open(p,encoding='utf-8').read()
+          perms=['ACCESS_FINE_LOCATION','ACCESS_COARSE_LOCATION','POST_NOTIFICATIONS','USE_FULL_SCREEN_INTENT','USE_EXACT_ALARM','WAKE_LOCK','FOREGROUND_SERVICE','FOREGROUND_SERVICE_MEDIA_PLAYBACK','RECEIVE_BOOT_COMPLETED','SYSTEM_ALERT_WINDOW','REQUEST_IGNORE_BATTERY_OPTIMIZATIONS','VIBRATE']
+          add=''.join('    <uses-permission android:name="android.permission.%s" />\n'%x for x in perms)
+          add+='    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />\n'
+          add+='    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n'
+          comp="""        <receiver android:name=".AdhanReceiver" android:exported="false" />
+                  <receiver android:name=".BootReceiver" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                          <action android:name="android.intent.action.TIME_SET" />
+                          <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                      </intent-filter>
+                  </receiver>
+                  <service android:name=".AdhanService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
+          """
+          assert '<application' in s and '</application>' in s
+          s=s.replace('<application',add+'    <application',1)
+          s=s.replace('</application>',comp+'    </application>',1)
+          open(p,'w',encoding='utf-8').write(s)
+          print(s)
+          PY
+      - name: Adhan sounds into the app (res/raw)
+        run: |
+          python3 - <<'PY'
+          import re,base64,os
+          s=open('www/index.html',encoding='utf-8').read()
+          i=s.index('const ADH=');j=s.index('};',i)
+          os.makedirs('android/app/src/main/res/raw',exist_ok=True)
+          n=0
+          for m in re.finditer(r'"(a_[a-z0-9_]+)":"data:audio/([a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)"',s[i:j]):
+              ext={'mpeg':'mp3','mp3':'mp3','ogg':'ogg','wav':'wav','x-wav':'wav','mp4':'m4a','aac':'aac'}.get(m.group(2),'mp3')
+              open('android/app/src/main/res/raw/%s.%s'%(m.group(1),ext),'wb').write(base64.b64decode(m.group(3)));n+=1
+          print('sounds extracted:',n)
+          assert n>0
+          PY
       - name: Fixed signing and version
         run: |
           python3 - <<'PY'
