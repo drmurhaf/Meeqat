@@ -73,7 +73,7 @@ input,select{background:var(--card);color:var(--tx);border:1px solid var(--line)
 .sw.on{background:var(--ac)}.sw.on::after{inset-inline-start:25px}
 .toast{color:var(--mut);font-size:12.5px;margin-top:6px;min-height:18px}
 /* ألوان حالة الصلاة */
-.c-m10{--cr:22,163,74}.c-m5{--cr:37,99,235}.c-m3{--cr:168,85,247}.c-late{--cr:249,115,22}.c-qada{--cr:234,179,8}.c-x{--cr:195,154,67}.c-miss{--cr:220,38,38}
+.c-m10{--cr:22,163,74}.c-m5{--cr:37,99,235}.c-m3{--cr:168,85,247}.c-late{--cr:249,115,22}.c-qada{--cr:234,179,8}.c-x{--cr:195,154,67}.o.dis{opacity:.38;filter:grayscale(1);pointer-events:none}.c-miss{--cr:220,38,38}
 .p.k{background:rgba(var(--cr),.14);border-color:rgba(var(--cr),.55);border-inline-start:5px solid rgb(var(--cr))}
 .p.k .pt{background:rgb(var(--cr));color:#fff;border:0}
 .p.k.c-qada .pt{color:#1f2937}
@@ -212,14 +212,16 @@ async function playSound(k,slot){
   }catch(e){if(e&&e.name=="NotAllowedError")showSnb(k,slot)}
 }
 /* نافذة الأذان: تظهر بصورة الوقت الداخل نفسها الموجودة في البطاقة العلوية، وإغلاقها يوقف الأذان */
-let AWT=null;
+let AWT=null,NATWIN=false,AWK="",NDIS="";
 function closeAdhan(stop){
   if(AWT){clearTimeout(AWT);AWT=null}
+  NATWIN=false;
   const w=document.getElementById("aw");if(w)w.classList.remove("on");
-  if(stop){stopSound();hideSnb();try{AE.pause();AE.currentTime=0}catch(e){}}
+  if(stop){stopSound();hideSnb();try{AE.pause();AE.currentTime=0}catch(e){}if(typeof NATIVE_AD!="undefined"&&NATIVE_AD){NDIS=AWK;try{NATIVE_AD.stop().catch(()=>{})}catch(e){}}}
 }
-function showAdhan(p,k){
+function showAdhan(p,k,nat){
   if(!p||k=="off")return;
+  AWK=p.k;NATWIN=!!nat;
   let w=document.getElementById("aw");
   if(!w){
     w=document.createElement("div");w.id="aw";
@@ -232,7 +234,7 @@ function showAdhan(p,k){
   w.classList.add("on");
   if(AWT){clearTimeout(AWT);AWT=null}
   const d={soft:3.4,bell:6,chime:2.8}[k];
-  if(d)AWT=setTimeout(()=>closeAdhan(false),d*1000);
+  if(d&&!nat)AWT=setTimeout(()=>closeAdhan(false),d*1000);
 }
 AE.addEventListener("ended",()=>{if(AE.src===SIL)return;closeAdhan(false)});
 const SH={m10:"جماعة في المسجد",m5:"جماعة (بيت/عمل) أو منفرد بالمسجد",m3:"منفرداً (على وقتها)",late:"متأخرة",qada:"قضاء",miss:"فائتة"};
@@ -278,7 +280,7 @@ function stats(){
   el.innerHTML='<div class="hc" title="نقاط الأسبوع"><small>الأسبوع</small><b class="'+(w<0?"neg":"")+'">'+w+'</b></div><div class="hc m" title="نقاط الشهر"><small>الشهر</small><b class="'+(mo<0?"neg":"")+'">'+mo+'</b></div>'}
 function dayDetail(k,back){
   const l=S.log[k]||{},p=k.split("-").map(Number),dt=new Date(p[0],p[1]-1,p[2]);
-  const rows=NAMES.map(n=>{const r=l[n[0]];if(!r)return '<div class="dr"><b>'+n[1]+'</b><span>لم تُسجَّل</span></div>';const o=OPTS.find(x=>x[0]==r.o);return '<div class="dr k c-'+(r.o=="miss"&&r.q?"qada":r.o)+'"><b>'+n[1]+'</b><span>'+(o?o[1]:"")+(r.s?" + سنة":"")+(r.w?" + وتر":"")+qnote(r)+'</span>'+pt(ptsOf(r))+'</div>'}).join("")+(dhOn(k)?'<div class="dr k c-m10"><b>صلاة الضحى</b><span>تم أداؤها</span>'+pt(DUHA_PTS)+'</div>':"");
+  const rows=NAMES.map(n=>{const r=l[n[0]];if(!r)return '<div class="dr"><b>'+n[1]+'</b><span>لم تُسجَّل</span></div>';const o=OPTS.find(x=>x[0]==r.o);return '<div class="dr k c-'+(r.o=="miss"&&r.q?"qada":r.o)+'"><b>'+n[1]+'</b><span>'+OL(o,r)+(r.s?" + سنة":"")+(r.w?" + وتر":"")+qnote(r)+'</span>'+pt(ptsOf(r))+'</div>'}).join("")+(dhOn(k)?'<div class="dr k c-m10"><b>صلاة الضحى</b><span>تم أداؤها</span>'+pt(DUHA_PTS)+'</div>':"");
   openSheet(XB+'<div class="dh"><h2>'+dt.toLocaleDateString("ar-u-nu-latn",{weekday:"long",day:"numeric",month:"long",year:"numeric"})+'</h2><div class="dpt'+(score(k)<0?' neg':'')+'"><b>'+score(k)+'</b><small>نقطة</small></div></div>'+rows+(back?'<button class="btn g" id="bk">رجوع</button>':""));
   $("sheet").onclick=ev=>{if(ev.target.closest("#xc")){closeSheet();return}if(back&&ev.target.id=="bk")monthDetail(back)};
 }
@@ -321,7 +323,8 @@ function times(d){
 let T=[],TD="",TN=[],TP=null;
 function ensure(){const now=new Date(),k=key(now);if(k!==TD){TD=k;T=times(now);const tm=new Date(now.getTime()+864e5);TN=times(tm);TP=times(new Date(now.getTime()-864e5))}}
 const score=(k)=>{const l=S.log[k]||{};let s=0;for(const p of NAMES){const r=l[p[0]];if(r)s+=ptsOf(r)}return s+(dhOn(k)?DUHA_PTS:0)};
-const ptsOf=r=>{const o=OPTS.find(x=>x[0]==r.o);return (r.o=="miss"&&r.q?0:(o?o[2]:0))+(r.s?1:0)+(r.w?3:0)};
+const ptsOf=r=>{const o=OPTS.find(x=>x[0]==r.o);return (r.o=="miss"&&r.q?0:(o?(r.o=="m5"&&r.l?3:o[2]):0))+(r.s?1:0)+(r.w?3:0)};
+const OL=(o,r)=>o?(o[0]=="m5"&&r&&r.l?"متأخراً: "+o[1]:o[1]):"";
 const DUHA_PTS=2,dhOn=k=>!!(S.dh&&S.dh[k]);
 
 let HS="",HN="",DS=-1;const prevK=k=>NAMES[(NAMES.findIndex(n=>n[0]==k)+4)%5][0];
@@ -355,13 +358,56 @@ function heroScene(k){
 const sceneFor=(np,now)=>(np.k=="dhuhr"&&T[0]&&T[0].sr&&now>=T[0].sr)?"sunrise":prevK(np.k);
 function setScene(k){if(HS===k)return;HS=k;const h=document.querySelector(".hero");if(!h)return;const o=h.querySelector(".hbg");if(o)o.remove();h.insertAdjacentHTML("afterbegin",heroScene(k))}
 const ICN={fajr:"🌌",dhuhr:"☀️",asr:"🌤️",maghrib:"🌇",isha:"🌙"};
+/* ===== الأذان الأصلي في أندرويد: يعمل والتطبيق مغلق وفوق التطبيقات والشاشة المقفلة ===== */
+const NATIVE_AD=(()=>{try{const C=window.Capacitor;if(!(C&&C.isNativePlatform&&C.isNativePlatform()))return null;return (C.Plugins&&C.Plugins.Adhan)||(C.registerPlugin&&C.registerPlugin("Adhan"))||null}catch(e){return null}})();
+let NAT=null,NSIG="";
+function nativeSchedule(){
+  if(!NATIVE_AD||!T.length)return;
+  const sig=[S.notif,S.snd,JSON.stringify(S.pm),S.lat,S.lng,S.method,S.asr,TD].join("|");
+  if(sig===NSIG)return;NSIG=sig;
+  if(!S.notif||S.snd=="off"){try{NATIVE_AD.schedule({items:[]}).then(()=>{NAT=false}).catch(()=>{})}catch(e){}return}
+  const items=[],now=Date.now(),d=new Date();d.setHours(12,0,0,0);
+  for(let g=0;g<7;g++,d.setDate(d.getDate()+1)){const tt=g==0?T:times(new Date(d));tt.forEach(p=>{if(pOn(p.k)){const t=+p.s;if(t>now+3000)items.push({t,key:p.k,name:p.n,sound:S.snd})}})}
+  try{NATIVE_AD.schedule({items}).then(r=>{NAT=!!(r&&r.scheduled>0&&r.exact)}).catch(()=>{NAT=false})}catch(e){NAT=false}
+}
+async function permSheet(){
+  let st={};try{st=await NATIVE_AD.status()}catch(e){}
+  const row=(t,ok,type,hint)=>'<div class="row"><label>'+(ok?"✅ ":"⚠️ ")+t+'<br><small style="color:var(--mut)">'+hint+'</small></label>'+(ok?"":'<button class="btn g" data-ps="'+type+'" style="margin:0;width:auto;padding:8px 14px">تفعيل</button>')+'</div>';
+  openSheet('<div class="shd"><h2>أذان أندرويد</h2><button class="cls" id="cl" aria-label="إغلاق">✕</button></div><div class="s">فعّل هذه الصلاحيات ليظهر الأذان فوق التطبيقات والشاشة المقفلة. ويعمل أيضاً عند تفعيل «التنبيهات» في الإعدادات.</div>'
+   +row("الإشعارات",st.notif,"notif","لإظهار تنبيه الصلاة")
+   +row("المنبّهات الدقيقة",st.exact,"exact","لتشغيل الأذان في وقته بالضبط")
+   +row("الظهور فوق التطبيقات",st.overlay,"overlay","لفتح ميقات فوق أي تطبيق مفتوح")
+   +row("الإشعارات بملء الشاشة",st.fullScreen,"fullscreen","لفتح التطبيق على الشاشة المقفلة")
+   +row("استثناء من توفير البطارية",st.battery,"battery","حتى لا يوقفه النظام")
+   +'<button class="btn" id="psr">تحديث الحالة</button>');
+  $("sheet").onclick=ev=>{const b=ev.target.closest("[data-ps]");if(b){try{NATIVE_AD.openSettings({type:b.dataset.ps}).catch(()=>{})}catch(e){}return}if(ev.target.id=="psr")permSheet();if(ev.target.id=="cl")closeSheet()};
+}
+/* تسجيل الصلاة «فائتة» تلقائياً عند انقضاء وقتها دون تسجيل */
+let NE=0,AMK="";
+function autoMiss(){
+  ensure();if(!T.length)return;
+  const now=new Date(),nt=now.getTime();
+  if(AMK===TD&&NE&&nt<NE)return;
+  let ch=false,ne=0;
+  if(!S.amFrom){S.amFrom=key(now);ch=true}
+  const a=S.amFrom.split("-").map(Number),d=new Date(a[0],a[1]-1,a[2],12),last=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12);
+  for(let g=0;d<=last&&g<120;g++,d.setDate(d.getDate()+1)){
+    const dk=key(d),tt=dk===TD?T:times(new Date(d));
+    const ends=[tt[0].sr,tt[2].s,tt[3].s,tt[4].s,new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,0,0,0)];
+    tt.forEach((p,i)=>{const e=+ends[i];
+      if(nt>=e){const l=S.log[dk]=S.log[dk]||{};if(!l[p.k]){l[p.k]={o:"miss",s:0,w:0,a:1};ch=true}}
+      else if(!ne||e<ne)ne=e});
+  }
+  NE=ne;AMK=TD;
+  if(ch)save();
+}
 function render(){
-  ensure();const now=new Date(),k=key(now),log=S.log[k]||{};
+  ensure();autoMiss();nativeSchedule();const now=new Date(),k=key(now),log=S.log[k]||{};
   $("sub").textContent=now.toLocaleDateString("ar-u-nu-latn",{weekday:"long",day:"numeric",month:"long"})+" · "+(S.city=="موقعي الحالي"&&S.locName?S.locName:S.city);
   let cur=-1;T.forEach((p,i)=>{if(now>=p.s)cur=i});
   $("list").innerHTML=T.map((p,i)=>{
     const open=now>=p.s,r=log[p.k];let cc="",badge='<span class="pt none">—</span>',sub=open?(i==cur?"الوقت الآن · اضغط للتسجيل":"اضغط للتسجيل"):"لم يحن الوقت بعد";
-    if(r){const v=ptsOf(r),o=OPTS.find(x=>x[0]==r.o);badge='<span class="pt '+(v<0?"neg":"")+'">'+(v>0?"+":"")+v+'</span>';sub=(o?o[1]:"")+(r.s?" + سنة":"")+(r.w?" + وتر":"")+qnote(r);cc=" k c-"+(r.o=="miss"&&r.q?"qada":r.o)}
+    if(r){const v=ptsOf(r),o=OPTS.find(x=>x[0]==r.o);badge='<span class="pt '+(v<0?"neg":"")+'">'+(v>0?"+":"")+v+'</span>';sub=OL(o,r)+(r.s?" + سنة":"")+(r.w?" + وتر":"")+qnote(r)+(r.o=="miss"&&!r.q?" · اضغط لقضائها (+1)":"");cc=" k c-"+(r.o=="miss"&&r.q?"qada":r.o)}
     return '<button class="p '+(i==cur?"cur":"")+(open?"":" lock")+cc+'" data-i="'+i+'"><span class="ic">'+(ICN[p.k]||"🕌")+'</span><div class="n"><b>'+p.n+'</b><small>'+sub+'</small></div><span class="t">'+fmt(p.s)+'</span>'+badge+'</button>'+(i==0?(()=>{const so=now>=p.sr,dd=dhOn(k),ex=T[1]&&now>=T[1].s,lk=!so||ex;return '<button class="p sr'+(lk?" lock":"")+(dd?" k c-m10":"")+'" data-d="1"><span class="ic">🌅</span><div class="n"><b>الشروق</b><small>'+(dd?"تم أداء صلاة الضحى":!so?"لم يحن الوقت بعد":ex?"فات وقت صلاة الضحى":"اضغط لتسجيل صلاة الضحى (+2)")+'</small></div><span class="t">'+fmt(p.sr)+'</span>'+(dd?'<span class="pt">+2</span>':'<span class="pt none">—</span>')+'</button>'})():"")}).join("");
   const sc=score(k);$("sc").textContent=sc;$("rg").style.strokeDashoffset=238.8*(1-Math.max(0,Math.min(1,sc/55)));
   const nx=T.findIndex(p=>p.s>now);
@@ -372,7 +418,7 @@ function render(){
 }
 function tick(){
   if(!T.length)return;const now=new Date();
-  if(key(now)!==TD){render();return}
+  if(key(now)!==TD||(NE&&now.getTime()>=NE)){render();return}
   {const ds=now<T[0].sr?0:now<T[1].s?1:2;if(ds!==DS){DS=ds;render();return}}
   const nx=T.find(p=>p.s>now),np=nx||TN[0],ms=np.s-now;
   if(np.k!==HN){HN=np.k;$("nn").textContent=np.n;$("nl").textContent="الصلاة القادمة · "+fmt(np.s)}setScene(sceneFor(np,now));
@@ -381,7 +427,7 @@ function tick(){
   const s=Math.max(0,Math.floor(ms/1000)),h=Math.floor(s/3600),m=Math.floor(s%3600/60),c=s%60;
   $("cd").textContent=[h,m,c].map(x=>String(x).padStart(2,"0")).join(":");
   if(S.notif){
-    T.forEach(p=>{if(!pOn(p.k))return;const id=key(now)+p.k,df=now-p.s;if(df>=0&&df<90000&&!S.sent[id]){S.sent[id]=1;save();notify("حان وقت صلاة "+p.n,{body:"لا تنسَ تسجيل صلاتك 🌿",silent:false,vibrate:[400,200,400,200,400]});showAdhan(p,S.snd);playSound(S.snd);}})}
+    T.forEach(p=>{if(!pOn(p.k))return;const id=key(now)+p.k,df=now-p.s;if(df>=0&&df<90000&&!S.sent[id]){S.sent[id]=1;save();if(NAT===false||!NATIVE_AD){notify("حان وقت صلاة "+p.n,{body:"لا تنسَ تسجيل صلاتك 🌿",silent:false,vibrate:[400,200,400,200,400]});showAdhan(p,S.snd);playSound(S.snd)}}})}
 }
 const $=s=>document.getElementById(s);
 function openSheet(h){$("sheet").innerHTML=h;$("ov").classList.add("on")}
@@ -393,14 +439,19 @@ $("list").addEventListener("click",e=>{
   if(sb){ensure();const n=new Date();if(T[0]&&T[1]&&n>=T[0].sr&&n<T[1].s){const k0=key(n);S.dh=S.dh||{};if(S.dh[k0])delete S.dh[k0];else S.dh[k0]=1;save();render()}return}
   const b=e.target.closest(".p");if(!b||b.dataset.i===undefined)return;const p=T[+b.dataset.i];if(new Date()<p.s)return;
   const k=key(new Date()),r=(S.log[k]||{})[p.k]||{o:null,s:0};
-  let sel=r.o,sn=r.s,wt=r.w||0;
-  const draw=()=>{openSheet('<h2>صلاة '+p.n+'</h2><div class="s">'+fmt(p.s)+' · كيف أدّيتها؟</div>'+OPTS.map(o=>'<button class="o c-'+o[0]+' '+(o[2]<0?"bad ":"")+(sel==o[0]?"sel":"")+'" data-o="'+o[0]+'"><span>'+o[1]+'</span><em>'+(o[2]>0?"+":"")+o[2]+'</em></button>').join("")+'<div class="row"><label>أضفت صلاة السنة (+١ نقطة)</label><button class="sw '+(sn?"on":"")+'" id="sn"></button></div>'+(p.k=="isha"?'<div class="row"><label>أضفت صلاة الوتر (+٣ نقاط)</label><button class="sw '+(wt?"on":"")+'" id="wt"></button></div>':"")+'<button class="btn" id="ok">حفظ</button>'+(r.o?'<button class="btn g" id="clr">مسح التسجيل</button>':""))};
+  const lock=(r.o=="miss"&&!r.q)||r.o=="qada";
+  /* خيارات «على وقتها» متاحة في أول 60 دقيقة بعد دخول الوقت فقط */
+  const early=()=>Date.now()-p.s<=60*6e4,ONT=["m10","m3"];
+  const okOpt=o=>early()||!ONT.includes(o[0])||o[0]==r.o;
+  const m5late=()=>!early()&&!(r.o=="m5"&&!r.l);
+  let sel=lock?"qada":r.o,sn=r.s,wt=r.w||0;
+  const draw=()=>{openSheet('<h2>صلاة '+p.n+'</h2><div class="s">'+(lock?"فاتك وقتها، ويمكنك تسجيلها قضاءً فقط (+1 نقطة)":early()?fmt(p.s)+' · كيف أدّيتها؟':"مضت ساعة على دخول الوقت، اختر: متأخراً (جماعة في البيت أو العمل أو منفرداً في المسجد)، أو قضاء، أو فائتة")+'</div>'+(lock?OPTS.filter(o=>o[0]=="qada"):OPTS.filter(okOpt)).map(o=>'<button class="o c-'+o[0]+' '+(o[2]<0?"bad ":"")+(sel==o[0]?"sel":"")+'" data-o="'+o[0]+'"><span>'+(o[0]=="m5"&&m5late()?"متأخراً: "+o[1]:o[1])+'</span><em>'+(o[0]=="m5"&&m5late()?"+3":(o[2]>0?"+":"")+o[2])+'</em></button>').join("")+(!early()&&!lock?'<div class="s" style="margin:6px 0">مضى أكثر من 60 دقيقة على دخول الوقت، فلم يعد متاحاً «جماعة في المسجد» و«منفرداً على وقتها».</div>':"")+(lock?"":'<div class="row"><label>أضفت صلاة السنة (+١ نقطة)</label><button class="sw '+(sn?"on":"")+'" id="sn"></button></div>')+(p.k=="isha"&&!lock?'<div class="row"><label>أضفت صلاة الوتر (+٣ نقاط)</label><button class="sw '+(wt?"on":"")+'" id="wt"></button></div>':"")+'<button class="btn" id="ok">حفظ</button>'+(r.o&&r.o!="miss"?'<button class="btn g" id="clr">مسح التسجيل</button>':""))};
   draw();
   $("sheet").onclick=ev=>{
-    const o=ev.target.closest(".o");if(o){sel=o.dataset.o;draw();return}
+    const o=ev.target.closest(".o");if(o){if(o.classList.contains("dis"))return;sel=o.dataset.o;draw();return}
     if(ev.target.id=="sn"){sn=sn?0:1;draw();return}
     if(ev.target.id=="wt"){wt=wt?0:1;draw();return}
-    if(ev.target.id=="ok"&&sel){S.log[k]=S.log[k]||{};S.log[k][p.k]={o:sel,s:sn,w:p.k=="isha"?wt:0};save();closeSheet();render()}
+    if(ev.target.id=="ok"&&sel){if(!lock&&!early()&&ONT.includes(sel)&&sel!==r.o){sel=null;draw();return}S.log[k]=S.log[k]||{};S.log[k][p.k]=lock?{o:"qada",s:0,w:0,qt:Date.now()}:Object.assign({o:sel,s:sn,w:p.k=="isha"?wt:0},sel=="m5"&&m5late()?{l:1}:{});save();closeSheet();render()}
     if(ev.target.id=="clr"){delete S.log[k][p.k];save();closeSheet();render()}
   };
 });
@@ -414,7 +465,7 @@ $("gear").onclick=()=>{
    '<div class="two" style="margin-top:8px"><input id="la" type="number" step="0.001" value="'+(+d.lat).toFixed(3)+'" placeholder="خط العرض"><input id="ln" type="number" step="0.001" value="'+(+d.lng).toFixed(3)+'" placeholder="خط الطول"></div>'+
    '<div class="row"><label>طريقة الحساب</label></div><select id="mt">'+Object.entries(METHODS).map(([k,v])=>'<option value="'+k+'" '+(d.method==k?"selected":"")+'>'+v[0]+'</option>').join("")+'</select>'+
    '<div class="row"><label>حساب وقت العصر</label></div><select id="as"><option value="std" '+(d.asr!="hanafi"?"selected":"")+'>مالكي · شافعي · حنبلي</option><option value="hanafi" '+(d.asr=="hanafi"?"selected":"")+'>حنفي</option></select>'+'<div class="row"><label>نظام عرض الوقت</label></div><select id="tf"><option value="24" '+(d.tf=="24"?"selected":"")+'>نظام 24 ساعة</option><option value="12" '+(d.tf=="12"?"selected":"")+'>نظام 12 ساعة</option><option value="auto" '+(d.tf=="auto"?"selected":"")+'>حسب وقت الجهاز</option></select>'+'<div class="row"><label>صوت التنبيه</label></div><select id="sd">'+SNDS.map(s=>'<option value="'+s[0]+'" '+(d.snd==s[0]?"selected":"")+'>'+s[1]+'</option>').join("")+'</select>'+(d.snd=="custom"?'<div class="row"><label>'+(d.sndName?("الملف: "+d.sndName):"لم يُختر ملف بعد")+'</label></div><input type="file" id="sf" accept="audio/*">':"")+'<div class="two" style="margin-top:8px"><button class="btn g" id="pv" style="margin-top:0">▶ تجربة الصوت</button><button class="btn g" id="stp" style="margin-top:0">⏹ إيقاف</button></div>'+(d.snd!="off"?'<div class="row"><label>تفعيل التنبيه لكل صلاة</label></div>'+NAMES.map(n=>'<div class="row"><label>'+n[1]+'</label><button class="sw '+((d.pm||{})[n[0]]!==false?"on":"")+'" id="pm_'+n[0]+'"></button></div>').join(""):"")+'<div class="row"><label>تنبيهات أوقات الصلاة</label><button class="sw '+(d.notif?"on":"")+'" id="nt"></button></div>'+'<div class="row"><label>إبقاء التنبيه يعمل في الخلفية</label><button class="sw '+(d.ka!==false?"on":"")+'" id="kab"></button></div><div class="toast">يشغّل صوتاً صامتاً غير مسموع ليبقى المتصفح نشطاً وقت الأذان (قد يظهر إشعار وسائط، ويستهلك بطارية أكثر قليلاً)</div>'+
-   '<div class="row"><label>تنبيه قبل الصلاة</label></div><select id="pr">'+[0,5,10,15,20].map(m=>'<option value="'+m+'" '+((d.pre||0)==m?"selected":"")+'>'+(m?m+" دقيقة قبل الصلاة":"بدون")+'</option>').join("")+'</select>'+'<div class="row"><label>نغمة التنبيه قبل الصلاة</label></div><select id="sp">'+SNDS.filter(s=>s[0].slice(0,2)!="a_").map(s=>'<option value="'+s[0]+'" '+(d.sndPre==s[0]?"selected":"")+'>'+s[1]+'</option>').join("")+'</select>'+(d.sndPre=="custom"?'<div class="row"><label>'+(d.sndPreName?("الملف: "+d.sndPreName):"لم يُختر ملف بعد")+'</label></div><input type="file" id="sf2" accept="audio/*">':"")+'<div class="two" style="margin-top:8px"><button class="btn g" id="pv2" style="margin-top:0">▶ تجربة الصوت</button><button class="btn g" id="stp2" style="margin-top:0">⏹ إيقاف</button></div>'+'<div class="row"><label>نغمة تنبيه عدم تسجيل الصلاة</label></div><select id="spo">'+SNDS.filter(s=>s[0].slice(0,2)!="a_").map(s=>'<option value="'+s[0]+'" '+(d.sndPost==s[0]?"selected":"")+'>'+s[1]+'</option>').join("")+'</select>'+(d.sndPost=="custom"?'<div class="row"><label>'+(d.sndPostName?("الملف: "+d.sndPostName):"لم يُختر ملف بعد")+'</label></div><input type="file" id="sf3" accept="audio/*">':"")+'<div class="two" style="margin-top:8px"><button class="btn g" id="pv3" style="margin-top:0">▶ تجربة الصوت</button><button class="btn g" id="stp3" style="margin-top:0">⏹ إيقاف</button></div>'+'<div class="toast">🔔 تذكير تلقائي إن لم تسجّل الصلاة: بعد 20 دقيقة، بعد ساعة، وقبل انتهاء وقتها بـ 10 دقائق</div>'+'<div class="row"><label>البيانات المسجلة</label></div>'+(d._rc?'<div class="toast" style="color:var(--bad);font-weight:700">⚠️ سيتم حذف كل سجل الصلوات نهائياً. للتأكيد اكتب كلمة «حذف» ثم اضغط تأكيد.</div><input id="rsw" type="text" autocomplete="off" placeholder="اكتب: حذف" style="margin-top:8px"><div class="two" style="margin-top:8px"><button class="btn dng cf" id="rst2" style="margin-top:0;opacity:.45" disabled>تأكيد الحذف</button><button class="btn g" id="rsx" style="margin-top:0">إلغاء</button></div>':'<button class="btn dng" id="rst" style="margin-top:0">🗑 حذف وتصفير سجل الصلوات السابقة</button>')+'<div class="toast">يحذف كل ما سجّلته من الصلوات السابقة والفائتة والنقاط ليبدأ العدّ من الصفر. إعداداتك لا تتغيّر، ولا يمكن التراجع.</div><button class="btn" id="sv">حفظ</button>')};
+   '<div class="row"><label>تنبيه قبل الصلاة</label></div><select id="pr">'+[0,5,10,15,20].map(m=>'<option value="'+m+'" '+((d.pre||0)==m?"selected":"")+'>'+(m?m+" دقيقة قبل الصلاة":"بدون")+'</option>').join("")+'</select>'+'<div class="row"><label>نغمة التنبيه قبل الصلاة</label></div><select id="sp">'+SNDS.filter(s=>s[0].slice(0,2)!="a_").map(s=>'<option value="'+s[0]+'" '+(d.sndPre==s[0]?"selected":"")+'>'+s[1]+'</option>').join("")+'</select>'+(d.sndPre=="custom"?'<div class="row"><label>'+(d.sndPreName?("الملف: "+d.sndPreName):"لم يُختر ملف بعد")+'</label></div><input type="file" id="sf2" accept="audio/*">':"")+'<div class="two" style="margin-top:8px"><button class="btn g" id="pv2" style="margin-top:0">▶ تجربة الصوت</button><button class="btn g" id="stp2" style="margin-top:0">⏹ إيقاف</button></div>'+'<div class="row"><label>نغمة تنبيه عدم تسجيل الصلاة</label></div><select id="spo">'+SNDS.filter(s=>s[0].slice(0,2)!="a_").map(s=>'<option value="'+s[0]+'" '+(d.sndPost==s[0]?"selected":"")+'>'+s[1]+'</option>').join("")+'</select>'+(d.sndPost=="custom"?'<div class="row"><label>'+(d.sndPostName?("الملف: "+d.sndPostName):"لم يُختر ملف بعد")+'</label></div><input type="file" id="sf3" accept="audio/*">':"")+'<div class="two" style="margin-top:8px"><button class="btn g" id="pv3" style="margin-top:0">▶ تجربة الصوت</button><button class="btn g" id="stp3" style="margin-top:0">⏹ إيقاف</button></div>'+'<div class="toast">🔔 تذكير تلقائي إن لم تسجّل الصلاة: بعد 20 دقيقة، بعد ساعة، وقبل انتهاء وقتها بـ 10 دقائق</div>'+'<div class="row"><label>البيانات المسجلة</label></div>'+(d._rc?'<div class="toast" style="color:var(--bad);font-weight:700">⚠️ سيتم حذف كل سجل الصلوات نهائياً. للتأكيد اكتب كلمة «حذف» ثم اضغط تأكيد.</div><input id="rsw" type="text" autocomplete="off" placeholder="اكتب: حذف" style="margin-top:8px"><div class="two" style="margin-top:8px"><button class="btn dng cf" id="rst2" style="margin-top:0;opacity:.45" disabled>تأكيد الحذف</button><button class="btn g" id="rsx" style="margin-top:0">إلغاء</button></div>':'<button class="btn dng" id="rst" style="margin-top:0">🗑 حذف وتصفير سجل الصلوات السابقة</button>')+'<div class="toast">يحذف كل ما سجّلته من الصلوات السابقة والفائتة والنقاط ليبدأ العدّ من الصفر. إعداداتك لا تتغيّر، ولا يمكن التراجع.</div>'+(NATIVE_AD?'<button class="btn g" id="ap">🔔 صلاحيات الأذان على أندرويد</button>':"")+'<button class="btn" id="sv">حفظ</button>')};
   draw();
   const sh=$("sheet");
   const grab=()=>{const c=$("ct");if(!c)return;d.lat=+$("la").value||d.lat;d.lng=+$("ln").value||d.lng;d.method=$("mt").value;d.asr=$("as").value;d.tf=$("tf").value;d.snd=$("sd").value;d.sndPre=$("sp").value;d.sndPost=$("spo").value;d.pre=+$("pr").value;if(c.value!="_"){d.city=c.value}const c0=CITIES[d.city];if(c0&&(Math.abs(c0[0]-d.lat)>0.0005||Math.abs(c0[1]-d.lng)>0.0005))d.city="موقع مخصص";}
@@ -422,7 +473,7 @@ $("gear").onclick=()=>{
   sh.onchange=async e=>{if(e.target.id=="sd"){grab();draw();return}if(e.target.id=="sp"||e.target.id=="spo"){grab();draw();return}if(e.target.id=="sf3"){const f=e.target.files[0];if(!f)return;if(f.size>15*1024*1024){$("ts").textContent="الملف كبير، اختر ملفاً أقل من 15 ميغابايت";return}try{await idbSet("sndpost",f);d.sndPostName=f.name;grab();draw();$("ts").textContent="تم اختيار الملف ✓"}catch(err){$("ts").textContent="تعذّر حفظ الملف"}return}if(e.target.id=="sf2"){const f=e.target.files[0];if(!f)return;if(f.size>15*1024*1024){$("ts").textContent="الملف كبير، اختر ملفاً أقل من 15 ميغابايت";return}try{await idbSet("sndpre",f);d.sndPreName=f.name;grab();draw();$("ts").textContent="تم اختيار الملف ✓"}catch(err){$("ts").textContent="تعذّر حفظ الملف"}return}if(e.target.id=="sf"){const f=e.target.files[0];if(!f)return;if(f.size>15*1024*1024){$("ts").textContent="الملف كبير، اختر ملفاً أقل من 15 ميغابايت";return}try{await idbSet("snd",f);d.sndName=f.name;grab();draw();$("ts").textContent="تم اختيار الملف ✓"}catch(err){$("ts").textContent="تعذّر حفظ الملف"}return}if(e.target.id=="ct"){const v=e.target.value;if(v!="_"){grab();const c=CITIES[v];d.city=v;d.lat=c[0];d.lng=c[1];d.mode="manual";draw()}}};
   sh.onclick=async ev=>{
     const id=ev.target.id;
-    if(id=="pv"){grab();const n=new Date();let c=0;T.forEach((p,i)=>{if(n>=p.s)c=i});showAdhan(T[c],d.snd);playSound(d.snd)}if(id=="stp"){stopSound();closeAdhan(false)}if(id=="pv2"){grab();playSound(d.sndPre,"sndpre")}if(id=="stp2"){stopSound()}if(id=="pv3"){grab();playSound(d.sndPost,"sndpost")}if(id=="stp3"){stopSound()}if(id=="cl"){stopSound();closeSheet()}
+    if(id=="pv"){grab();const n=new Date();let c=0;T.forEach((p,i)=>{if(n>=p.s)c=i});showAdhan(T[c],d.snd);playSound(d.snd)}if(id=="stp"){stopSound();closeAdhan(false)}if(id=="pv2"){grab();playSound(d.sndPre,"sndpre")}if(id=="stp2"){stopSound()}if(id=="pv3"){grab();playSound(d.sndPost,"sndpost")}if(id=="stp3"){stopSound()}if(id=="cl"){stopSound();closeSheet()}if(id=="ap"&&NATIVE_AD){permSheet();return}
     if(id=="rst"){grab();d._rc=1;draw();$("rsw")&&$("rsw").focus()}
     if(id=="rsx"){grab();d._rc=0;draw()}
     if(id=="rst2"){const w=$("rsw");if(!w||w.value.trim()!="حذف")return;d._rc=0;S.log={};save();TD="";render();draw();$("ts")&&($("ts").textContent="تم حذف سجل الصلوات، البداية من الصفر ✓")}if(id=="am"){grab();d.mode=d.mode=="auto"?"manual":"auto";draw();if(d.mode=="auto")$("gl").click()}
@@ -437,7 +488,7 @@ $("gear").onclick=()=>{
 $("qc").addEventListener("click",e=>{
   if(e.target.id=="qd"){
     const k0=key(new Date());let n=0;
-    document.querySelectorAll("#qc input[data-m]:checked").forEach(c=>{const q=c.dataset.m.split("|"),r=(S.log[q[0]]||{})[q[1]];if(r){r.q=k0;r.qt=Date.now();n++}});
+    document.querySelectorAll("#qc input[data-m]:checked").forEach(c=>{const q=c.dataset.m.split("|"),r=(S.log[q[0]]||{})[q[1]];if(r){if(q[0]===k0){r.o="qada";delete r.q;delete r.a;r.qt=Date.now()}else{r.q=k0;r.qt=Date.now()}n++}});
     if(!n)return;save();render();
   }
 });
@@ -448,7 +499,10 @@ async function notify(t,o){o=Object.assign({tag:t,renotify:true,lang:"ar",dir:"r
   try{new Notification(t,o)}catch(e){}
   try{if(o.vibrate&&navigator.vibrate)navigator.vibrate(o.vibrate)}catch(e){}}
 if("serviceWorker"in navigator&&/^https?:/.test(location.protocol)){try{navigator.serviceWorker.register("sw.js").catch(()=>{})}catch(e){}}
-document.addEventListener("visibilitychange",()=>{if(!document.hidden){try{ac().resume()}catch(e){}try{tick()}catch(e){}try{kaSync()}catch(e){}}});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){try{ensure();NSIG="";nativeSchedule()}catch(e){}try{ac().resume()}catch(e){}try{tick()}catch(e){}try{kaSync()}catch(e){}}});
+if(NATIVE_AD)setInterval(()=>{try{NATIVE_AD.state().then(st=>{const w=document.getElementById("aw"),open=!!(w&&w.classList.contains("on"));
+  if(st&&st.playing){if(!open&&st.key!==NDIS){const p=T.find(x=>x.k===st.key);if(p)showAdhan(p,S.snd,true)}}
+  else{NDIS="";if(open&&NATWIN)closeAdhan(false)}}).catch(()=>{})}catch(e){}},1000);
 setTimeout(()=>{const p=document.getElementById("spl");if(p){p.classList.add("off");setTimeout(()=>p.remove(),700)}},1100);render();if(S.notif)showUb();setInterval(tick,1000);document.addEventListener("click",()=>{try{ac().resume()}catch(e){}});
 if(S.mode=="auto"&&navigator.geolocation){try{navigator.geolocation.getCurrentPosition(p=>{S.lat=p.coords.latitude;S.lng=p.coords.longitude;S.city="موقعي الحالي";save();TD="";render();locName(S.lat,S.lng).then(n=>{S.locName=n;save();TD="";render()})},()=>{},{timeout:8000})}catch(e){}}
 </script>
