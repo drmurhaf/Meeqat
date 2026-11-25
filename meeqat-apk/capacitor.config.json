@@ -1,0 +1,6 @@
+{
+  "appId": "com.murhaf.meeqat",
+  "appName": "ميقات",
+  "webDir": "www",
+  "android": { "backgroundColor": "#04382c" }
+}
