@@ -325,7 +325,7 @@ jobs:
                               .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                               .build());
                       int res = 0;
-                      if (sound.startsWith("a_")) {
+                      if (sound.startsWith("a_") || sound.startsWith("p_")) {
                           res = getResources().getIdentifier(sound, "raw", getPackageName());
                       }
                       if (res != 0) {
@@ -534,7 +534,7 @@ jobs:
           i=s.index('const ADH=');j=s.index('};',i)
           os.makedirs('android/app/src/main/res/raw',exist_ok=True)
           n=0
-          for m in re.finditer(r'"(a_[a-z0-9_]+)":"data:audio/([a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)"',s[i:j]):
+          for m in re.finditer(r'"((?:a|p)_[a-z0-9_]+)":"data:audio/([a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)"',s[i:j]):
               ext={'mpeg':'mp3','mp3':'mp3','ogg':'ogg','wav':'wav','x-wav':'wav','mp4':'m4a','aac':'aac'}.get(m.group(2),'mp3')
               open('android/app/src/main/res/raw/%s.%s'%(m.group(1),ext),'wb').write(base64.b64decode(m.group(3)));n+=1
           print('sounds extracted:',n)
