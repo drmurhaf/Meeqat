@@ -35,6 +35,10 @@ jobs:
               }
           }
           JAVA
+      - name: Location permission
+        run: |
+          sed -i 's#<application#<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n    <application#' android/app/src/main/AndroidManifest.xml
+          grep -n "LOCATION" android/app/src/main/AndroidManifest.xml
       - name: Fixed signing and version
         run: |
           python3 - <<'PY'
