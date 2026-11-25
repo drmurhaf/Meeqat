@@ -19,6 +19,25 @@ jobs:
       - run: npx cap add android
       - run: npx capacitor-assets generate --android
       - run: npx cap sync android
+      - name: Fixed signing and version
+        run: |
+          python3 - <<'PY'
+          import re
+          p='android/app/build.gradle'
+          s=open(p).read()
+          sign='''android {
+              signingConfigs {
+                  debug {
+                      storeFile file("../../meeqat.jks")
+                      storePassword "meeqat123"
+                      keyAlias "meeqat"
+                      keyPassword "meeqat123"
+                  }
+              }'''
+          s=s.replace('android {',sign,1)
+          s=re.sub(r'versionCode\s+\d+','versionCode ${{ github.run_number }}',s,count=1)
+          open(p,'w').write(s)
+          PY
       - name: Build debug APK
         working-directory: meeqat-apk/android
         run: ./gradlew assembleDebug
