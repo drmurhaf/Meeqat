@@ -19,6 +19,22 @@ jobs:
       - run: npx cap add android
       - run: npx capacitor-assets generate --android
       - run: npx cap sync android
+      - name: Allow autoplay of adhan sound
+        run: |
+          mkdir -p android/app/src/main/java/com/murhaf/meeqat
+          cat > android/app/src/main/java/com/murhaf/meeqat/MainActivity.java <<'JAVA'
+          package com.murhaf.meeqat;
+
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onStart() {
+                  super.onStart();
+                  getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+              }
+          }
+          JAVA
       - name: Fixed signing and version
         run: |
           python3 - <<'PY'
