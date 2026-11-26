@@ -69,7 +69,7 @@ jobs:
               }
 
               @Override
-              protected void onDestroy() {
+              public void onDestroy() {
                   handler.removeCallbacks(releaseTask);
                   if (inst == this) inst = null;
                   super.onDestroy();
