@@ -89,6 +89,21 @@ jobs:
                   c.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("items", json).apply();
               }
 
+              static void setDone(Context c, String json) {
+                  c.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("done", json).apply();
+              }
+
+              static boolean isDone(Context c, String day, String key) {
+                  try {
+                      JSONArray a = new JSONArray(c.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString("done", "[]"));
+                      String k = day + "|" + key;
+                      for (int i = 0; i < a.length(); i++) {
+                          if (k.equals(a.getString(i))) return true;
+                      }
+                  } catch (Exception e) { }
+                  return false;
+              }
+
               static boolean canExact(Context c) {
                   if (Build.VERSION.SDK_INT >= 31) {
                       AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
@@ -107,6 +122,15 @@ jobs:
                   Intent in = new Intent(c, AdhanReceiver.class);
                   in.setAction(ACTION);
                   return in;
+              }
+
+              private static int subIdx(String kind, String sub) {
+                  if ("adhan".equals(kind)) return 0;
+                  if ("pre".equals(kind)) return 1;
+                  if ("a20".equals(sub)) return 2;
+                  if ("a60".equals(sub)) return 3;
+                  if ("e10".equals(sub)) return 4;
+                  return 5;
               }
 
               static void cancelAll(Context c) {
@@ -138,14 +162,25 @@ jobs:
                               JSONObject o = items.getJSONObject(i);
                               long t = o.getLong("t");
                               if (t <= now + 1000) continue;
-                              int code = (int) (t / 60000L);
+                              String kind = o.optString("kind", "adhan");
+                              String sub = o.optString("sub", "");
+                              int code = (int) (((t / 60000L) * 16L + subIdx(kind, sub)) & 0x7fffffffL);
                               Intent in = baseIntent(c);
                               in.putExtra("key", o.optString("key"));
                               in.putExtra("name", o.optString("name"));
                               in.putExtra("sound", o.optString("sound"));
+                              in.putExtra("kind", kind);
+                              in.putExtra("sub", sub);
+                              in.putExtra("day", o.optString("day"));
+                              in.putExtra("title", o.optString("title"));
+                              in.putExtra("body", o.optString("body"));
                               PendingIntent pi = PendingIntent.getBroadcast(c, code, in, flags());
-                              PendingIntent show = PendingIntent.getActivity(c, code, new Intent(c, MainActivity.class), flags());
-                              am.setAlarmClock(new AlarmManager.AlarmClockInfo(t, show), pi);
+                              if ("adhan".equals(kind)) {
+                                  PendingIntent show = PendingIntent.getActivity(c, code, new Intent(c, MainActivity.class), flags());
+                                  am.setAlarmClock(new AlarmManager.AlarmClockInfo(t, show), pi);
+                              } else {
+                                  am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, t, pi);
+                              }
                               codes.put(code);
                               n++;
                           } catch (Exception e) { }
@@ -165,15 +200,39 @@ jobs:
           import android.os.Build;
 
           public class AdhanReceiver extends BroadcastReceiver {
+              private static String s(Intent i, String k) {
+                  String v = i.getStringExtra(k);
+                  return v == null ? "" : v;
+              }
+
               @Override
               public void onReceive(Context context, Intent intent) {
                   try {
-                      Intent s = new Intent(context, AdhanService.class);
-                      if (intent.getExtras() != null) s.putExtras(intent.getExtras());
+                      String kind = s(intent, "kind");
+                      if (kind.isEmpty()) kind = "adhan";
+                      String key = s(intent, "key");
+                      String day = s(intent, "day");
+                      String sub = s(intent, "sub");
+                      String sound = s(intent, "sound");
+                      String title = s(intent, "title");
+                      String body = s(intent, "body");
+                      if (title.isEmpty()) title = "حان وقت صلاة " + s(intent, "name");
+
+                      if ("post".equals(kind) && AdhanScheduler.isDone(context, day, key)) return;
+
+                      if (sound.isEmpty() || "off".equals(sound)) {
+                          AdhanNotif.post(context, AdhanNotif.idFor(kind, key, day, sub), title, body);
+                          return;
+                      }
+
+                      Intent svc = new Intent(context, AdhanService.class);
+                      if (intent.getExtras() != null) svc.putExtras(intent.getExtras());
+                      svc.putExtra("kind", kind);
+                      svc.putExtra("title", title);
                       if (Build.VERSION.SDK_INT >= 26) {
-                          context.startForegroundService(s);
+                          context.startForegroundService(svc);
                       } else {
-                          context.startService(s);
+                          context.startService(svc);
                       }
                   } catch (Exception e) { }
               }
@@ -220,10 +279,14 @@ jobs:
           public class AdhanService extends Service {
               public static volatile boolean playing = false;
               public static volatile String curKey = "";
+              public static volatile String curKind = "";
               private static final String CH = "meeqat_adhan";
               private static final int NID = 4711;
               private MediaPlayer mp;
               private PowerManager.WakeLock wl;
+              private String pendTitle = null;
+              private String pendBody = "";
+              private int pendId = 0;
 
               @Override
               public IBinder onBind(Intent intent) {
@@ -238,6 +301,11 @@ jobs:
                   } catch (Exception e) { }
               }
 
+              private static String str(Intent i, String k) {
+                  String v = i.getStringExtra(k);
+                  return v == null ? "" : v;
+              }
+
               @Override
               public int onStartCommand(Intent i, int flags, int startId) {
                   if (i != null && "STOP".equals(i.getAction())) {
@@ -248,36 +316,51 @@ jobs:
                       stopSelf();
                       return START_NOT_STICKY;
                   }
-                  String key = i.getStringExtra("key");
-                  String name = i.getStringExtra("name");
-                  String sound = i.getStringExtra("sound");
-                  if (key == null) key = "";
-                  if (name == null) name = "";
-                  if (sound == null) sound = "";
+                  String key = str(i, "key");
+                  String name = str(i, "name");
+                  String sound = str(i, "sound");
+                  String kind = str(i, "kind");
+                  String sub = str(i, "sub");
+                  String day = str(i, "day");
+                  String title = str(i, "title");
+                  String body = str(i, "body");
+                  if (kind.isEmpty()) kind = "adhan";
+                  if (title.isEmpty()) title = "حان وقت صلاة " + name;
+                  boolean isAdhan = "adhan".equals(kind);
+
+                  // an alert that was still active keeps its notification in the shade
+                  if (pendTitle != null) {
+                      AdhanNotif.post(this, pendId, pendTitle, pendBody);
+                  }
+                  pendTitle = title;
+                  pendBody = body;
+                  pendId = AdhanNotif.idFor(kind, key, day, sub);
 
                   makeChannel();
                   Intent open = new Intent(this, MainActivity.class);
                   open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                  open.putExtra("adhan", true);
-                  open.putExtra("key", key);
+                  if (isAdhan) {
+                      open.putExtra("adhan", true);
+                      open.putExtra("key", key);
+                  }
                   int imm = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
                   PendingIntent pi = PendingIntent.getActivity(this, 11, open, PendingIntent.FLAG_UPDATE_CURRENT | imm);
                   Intent stop = new Intent(this, AdhanService.class);
                   stop.setAction("STOP");
                   PendingIntent sp = PendingIntent.getService(this, 12, stop, PendingIntent.FLAG_UPDATE_CURRENT | imm);
 
-                  Notification n = new NotificationCompat.Builder(this, CH)
+                  NotificationCompat.Builder nb = new NotificationCompat.Builder(this, CH)
                           .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                          .setContentTitle("حان وقت صلاة " + name)
-                          .setContentText("ميقات")
+                          .setContentTitle(title)
+                          .setContentText(body.isEmpty() ? "ميقات" : body)
                           .setCategory(NotificationCompat.CATEGORY_ALARM)
                           .setPriority(NotificationCompat.PRIORITY_MAX)
                           .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                           .setOngoing(true)
                           .setContentIntent(pi)
-                          .setFullScreenIntent(pi, true)
-                          .addAction(0, "إيقاف الأذان", sp)
-                          .build();
+                          .addAction(0, "إيقاف الصوت", sp);
+                  if (isAdhan) nb.setFullScreenIntent(pi, true);
+                  Notification n = nb.build();
                   try {
                       if (Build.VERSION.SDK_INT >= 29) {
                           startForeground(NID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
@@ -293,13 +376,16 @@ jobs:
                   } catch (Exception e) { }
 
                   curKey = key;
+                  curKind = kind;
                   play(sound);
 
-                  try {
-                      if (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)) {
-                          startActivity(open);
-                      }
-                  } catch (Exception e) { }
+                  if (isAdhan) {
+                      try {
+                          if (Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(this)) {
+                              startActivity(open);
+                          }
+                      } catch (Exception e) { }
+                  }
                   return START_NOT_STICKY;
               }
 
@@ -362,6 +448,7 @@ jobs:
               private void stopAll() {
                   playing = false;
                   curKey = "";
+                  curKind = "";
                   stopPlayer();
                   try {
                       if (wl != null && wl.isHeld()) wl.release();
@@ -373,6 +460,11 @@ jobs:
                           stopForeground(true);
                       }
                   } catch (Exception e) { }
+                  // leave a normal notification in the shade after the sound ends
+                  if (pendTitle != null) {
+                      AdhanNotif.post(this, pendId, pendTitle, pendBody);
+                      pendTitle = null;
+                  }
                   stopSelf();
               }
 
@@ -380,6 +472,7 @@ jobs:
               public void onDestroy() {
                   playing = false;
                   curKey = "";
+                  curKind = "";
                   stopPlayer();
                   try {
                       if (wl != null && wl.isHeld()) wl.release();
@@ -395,6 +488,7 @@ jobs:
           import android.app.NotificationManager;
           import android.content.Context;
           import android.content.Intent;
+          import android.content.SharedPreferences;
           import android.net.Uri;
           import android.os.Build;
           import android.os.PowerManager;
@@ -427,9 +521,27 @@ jobs:
               }
 
               @PluginMethod
+              public void setDone(PluginCall call) {
+                  try {
+                      JSArray keys = call.getArray("keys");
+                      AdhanScheduler.setDone(getContext(), keys == null ? "[]" : keys.toString());
+                  } catch (Exception e) { }
+                  call.resolve();
+              }
+
+              @PluginMethod
+              public void showNotification(PluginCall call) {
+                  String t = call.getString("title", "");
+                  String b = call.getString("body", "");
+                  int id = 6000 + Math.abs((t + "|" + b).hashCode() % 90000);
+                  AdhanNotif.post(getContext(), id, t, b);
+                  call.resolve();
+              }
+
+              @PluginMethod
               public void state(PluginCall call) {
                   JSObject r = new JSObject();
-                  r.put("playing", AdhanService.playing);
+                  r.put("playing", AdhanService.playing && "adhan".equals(AdhanService.curKind));
                   r.put("key", AdhanService.curKey);
                   call.resolve(r);
               }
@@ -481,7 +593,10 @@ jobs:
                       } else if ("battery".equals(type)) {
                           in = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + pkg));
                       } else if ("notif".equals(type)) {
-                          if (Build.VERSION.SDK_INT >= 33) {
+                          SharedPreferences sp = getContext().getSharedPreferences(AdhanScheduler.PREF, Context.MODE_PRIVATE);
+                          boolean asked = sp.getBoolean("np_asked", false);
+                          if (Build.VERSION.SDK_INT >= 33 && !asked) {
+                              sp.edit().putBoolean("np_asked", true).apply();
                               ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.POST_NOTIFICATIONS}, 4711);
                           } else {
                               in = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
@@ -500,6 +615,66 @@ jobs:
               }
           }
           JAVA_5
+          cat > $D/AdhanNotif.java <<'JAVA_6'
+          package com.murhaf.meeqat;
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Build;
+          import androidx.core.app.NotificationCompat;
+
+          final class AdhanNotif {
+              static final String CH = "meeqat_notes";
+
+              private AdhanNotif() {}
+
+              static void channel(Context c) {
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm.getNotificationChannel(CH) == null) {
+                          NotificationChannel ch = new NotificationChannel(CH, "تنبيهات الصلاة", NotificationManager.IMPORTANCE_HIGH);
+                          ch.setSound(null, null);
+                          ch.enableVibration(true);
+                          ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+                          nm.createNotificationChannel(ch);
+                      }
+                  }
+              }
+
+              static int idFor(String kind, String key, String day, String sub) {
+                  String s = kind + "|" + key + "|" + day + "|" + sub;
+                  return 6000 + Math.abs(s.hashCode() % 90000);
+              }
+
+              static void post(Context c, int id, String title, String body) {
+                  try {
+                      channel(c);
+                      Intent open = new Intent(c, MainActivity.class);
+                      open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                      int imm = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
+                      PendingIntent pi = PendingIntent.getActivity(c, id, open, PendingIntent.FLAG_UPDATE_CURRENT | imm);
+                      String b = body == null ? "" : body;
+                      Notification n = new NotificationCompat.Builder(c, CH)
+                              .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                              .setContentTitle(title)
+                              .setContentText(b)
+                              .setStyle(new NotificationCompat.BigTextStyle().bigText(b))
+                              .setAutoCancel(true)
+                              .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                              .setPriority(NotificationCompat.PRIORITY_HIGH)
+                              .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                              .setContentIntent(pi)
+                              .build();
+                      NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+                      nm.notify(id, n);
+                  } catch (Exception e) { }
+              }
+          }
+          JAVA_6
       - name: Android manifest (permissions, receivers, service)
         run: |
           python3 - <<'PY'
