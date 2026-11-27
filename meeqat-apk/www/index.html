@@ -550,7 +550,7 @@ async function verFill(){
   const e2=document.getElementById("vb");if(e2)e2.textContent=qT("نسخة الصفحة ","Page ")+PAGE_BUILD+n;
 }
 /* ===== التحديثات عبر GitHub Releases (مجاني، بدون سيرفر) ===== */
-const UPD_REPO="drmurhaf/meeqat",UPD_KEY="salat_upd",UPD_EVERY=12*36e5,UPD_SNOOZE=3*864e5;
+const UPD_REPO="drmurhaf/meeqat",UPD_KEY="salat_upd",UPD_EVERY=12*36e5;
 let UPD=(()=>{try{const x=JSON.parse(localStorage.getItem(UPD_KEY)||"null");return x&&typeof x==="object"?x:{}}catch(e){return{}}})();
 const updSave=()=>{try{localStorage.setItem(UPD_KEY,JSON.stringify(UPD))}catch(e){}};
 const updEsc=x=>String(x==null?"":x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -586,34 +586,28 @@ function updDownload(rel){
   const u=rel&&rel.url;if(!u)return;
   try{window.open(u,"_blank")}catch(e){try{location.href=u}catch(e2){}}
 }
-function updDialog(rel){
-  openSheet('<h2>'+qT("🔔 تحديث جديد","🔔 New update")+'</h2><div class="s">'+qT("يتوفر إصدار أحدث من ميقات","A newer version of Meeqat is available")+' · #'+rel.code+(rel.size?' · '+(rel.size/1048576).toFixed(1)+' MB':'')+'</div>'+
-    (rel.notes?'<div class="upn">'+updEsc(rel.notes)+'</div>':'')+
-    '<div class="toast">'+qT("يُثبَّت فوق نسختك الحالية وتبقى بياناتك كما هي. يمكنك أيضاً تنزيله لاحقاً من الإعدادات › التحديثات.","It installs over your current version and keeps your data. You can also download it later from Settings › Updates.")+'</div>'+
-    '<div class="two" style="margin-top:6px"><button class="btn" id="uup" type="button">'+qT("تحديث الآن","Update now")+'</button><button class="btn g" id="ulr" type="button">'+qT("لاحقاً","Later")+'</button></div>');
-  $("sheet").onclick=ev=>{
-    const id=ev.target&&ev.target.id;
-    if(id=="uup"){closeSheet();updDownload(rel)}
-    else if(id=="ulr")closeSheet();
-  };
+/* التنبيه: نفس فقاعة الإعدادات تحت أيقونة الترس، ويظهر نصّه بدلاً من نصها عند وجود تحديث */
+let UBUBT=0;
+function updBubble(){
+  const rel=updPending(),g=document.getElementById("gt");if(!rel||!g)return;
+  const ov=document.getElementById("ov"),aw=document.getElementById("aw");
+  if((ov&&ov.classList.contains("on"))||(aw&&aw.classList.contains("on")))return;
+  if(Date.now()-UBUBT<6e5)return;UBUBT=Date.now();
+  g.textContent=qT("⬆ يتوفر تحديث جديد · افتح الإعدادات","⬆ New update available · open Settings");
+  /* في أول ثانية ونصف تبدأ حركة الفقاعة الأصلية بنفسها بالنص الجديد؛ بعدها نعيد تشغيلها */
+  if((typeof performance!=="undefined"?performance.now():9e9)>1500){g.style.animation="none";void g.offsetWidth;g.style.animation="gtf 5s ease .15s forwards"}
 }
 /* فحص تلقائي: عند فتح التطبيق أو العودة إليه، بحد أقصى مرة كل 12 ساعة */
 async function updAuto(){
   if(UAUTO||!NATIVE_AD)return;UAUTO=true;
   try{
     const cur=await updCur();if(cur==null)return;
-    if(UPD.rel&&UPD.rel.code<=cur){UPD.rel=null;UPD.later=null;updSave()}
+    if(UPD.rel&&UPD.rel.code<=cur){UPD.rel=null;updSave()}
     const now=Date.now();
     if(!UPD.chk||UPD.chk>now||now-UPD.chk>=UPD_EVERY){
-      try{const rel=await updFetch();UPD.chk=Date.now();UPD.rel=rel.code>cur?rel:null;if(!UPD.rel)UPD.later=null;updSave()}catch(e){}
+      try{const rel=await updFetch();UPD.chk=Date.now();UPD.rel=rel.code>cur?rel:null;updSave()}catch(e){}
     }
-    updDot();
-    const rel=updPending();if(!rel)return;
-    if(UPD.later&&UPD.later.code===rel.code&&Date.now()<UPD.later.until)return;
-    const ov=document.getElementById("ov"),aw=document.getElementById("aw");
-    if((ov&&ov.classList.contains("on"))||(aw&&aw.classList.contains("on")))return;
-    UPD.later={code:rel.code,until:Date.now()+UPD_SNOOZE};updSave();
-    updDialog(rel);
+    updDot();updBubble();
   }catch(e){}finally{UAUTO=false}
 }
 /* فحص يدوي من الإعدادات */
@@ -624,7 +618,7 @@ async function updManual(){
   if(cur==null){USTAT="err";updPaint();return}
   try{
     const rel=await updFetch();
-    UPD.chk=Date.now();UPD.rel=rel.code>cur?rel:null;if(!UPD.rel)UPD.later=null;updSave();
+    UPD.chk=Date.now();UPD.rel=rel.code>cur?rel:null;updSave();
     USTAT=UPD.rel?"new":"ok";
   }catch(e){USTAT="err"}
   updDot();updPaint();
@@ -1038,7 +1032,7 @@ $("list").addEventListener("click",e=>{
 });
 
 $("gear").onclick=()=>{
-  const d=Object.assign({},S);psndMig(d);if(d.prof&&d.prof.gsync)d.prof=Object.assign({},d.prof,{gsync:false});
+  const d=Object.assign({},S);psndMig(d);if(NATIVE_AD&&updPending())d.open=Object.assign({},d.open,{upd:true});if(d.prof&&d.prof.gsync)d.prof=Object.assign({},d.prof,{gsync:false});
   const card=(k,ic,t,sm,b)=>'<section class="cd'+(d.open&&d.open[k]?" open":"")+'"><button class="cd-h" data-c="'+k+'"><span class="cd-ic">'+ic+'</span><span class="cd-t"><b>'+t+'</b><small>'+sm+'</small></span><span class="cd-ch"></span></button><div class="cd-b"><div class="cd-i">'+b+'</div></div></section>';
   const esc_=x=>String(x==null?"":x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const todayStr_=()=>{const n=new Date();return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0")};
@@ -1141,7 +1135,7 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden){try{ensur
 if(NATIVE_AD)setInterval(()=>{try{NATIVE_AD.state().then(st=>{const w=document.getElementById("aw"),open=!!(w&&w.classList.contains("on"));
   if(st&&st.playing){if(!open&&st.key!==NDIS){const p=T.find(x=>x.k===st.key);if(p)showAdhan(p,S.snd,true)}}
   else{NDIS="";if(open&&NATWIN)closeAdhan(false)}}).catch(()=>{})}catch(e){}},1000);
-setTimeout(()=>{const p=document.getElementById("spl");if(p){p.classList.add("off");setTimeout(()=>p.remove(),700)}},1100);if(NATIVE_AD)setTimeout(()=>{try{ensureNotifPerm()}catch(e){}},2500);if(NATIVE_AD){setTimeout(()=>{try{updAuto()}catch(e){}},4500);document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(()=>{try{updAuto()}catch(e){}},1500)})}render();if(S.notif)showUb();setInterval(tick,1000);document.addEventListener("click",()=>{try{ac().resume()}catch(e){}});
+setTimeout(()=>{const p=document.getElementById("spl");if(p){p.classList.add("off");setTimeout(()=>p.remove(),700)}},1100);if(NATIVE_AD)setTimeout(()=>{try{ensureNotifPerm()}catch(e){}},2500);if(NATIVE_AD){updCur().then(()=>{updDot();updBubble()}).catch(()=>{});setTimeout(()=>{try{updAuto()}catch(e){}},1200);document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(()=>{try{updAuto()}catch(e){}},1500)})}render();if(S.notif)showUb();setInterval(tick,1000);document.addEventListener("click",()=>{try{ac().resume()}catch(e){}});
 if(S.mode=="auto"&&navigator.geolocation){try{navigator.geolocation.getCurrentPosition(p=>{S.lat=p.coords.latitude;S.lng=p.coords.longitude;S.city="موقعي الحالي";save();TD="";render();locName(S.lat,S.lng).then(n=>{S.locName=n;save();TD="";render()})},()=>{},{timeout:8000})}catch(e){}}
 </script>
 </body>
