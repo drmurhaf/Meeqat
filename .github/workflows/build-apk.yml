@@ -312,6 +312,7 @@ jobs:
               public void onReceive(Context context, Intent intent) {
                   try {
                       AdhanScheduler.scheduleAll(context);
+                      PrayerWidget.refreshAll(context);
                   } catch (Exception e) { }
               }
           }
@@ -668,6 +669,16 @@ jobs:
               }
 
               @PluginMethod
+              public void setWidgetData(PluginCall call) {
+                  try {
+                      JSObject d = call.getObject("data");
+                      PrayerWidget.saveData(getContext(), d == null ? "{}" : d.toString());
+                      PrayerWidget.refreshAll(getContext());
+                  } catch (Exception e) { }
+                  call.resolve();
+              }
+
+              @PluginMethod
               public void showNotification(PluginCall call) {
                   String t = call.getString("title", "");
                   String b = call.getString("body", "");
@@ -814,6 +825,130 @@ jobs:
               }
           }
           JAVA_6
+          cat > $D/PrayerWidget.java <<'JAVA_7'
+          package com.murhaf.meeqat;
+
+          import android.app.AlarmManager;
+          import android.app.PendingIntent;
+          import android.appwidget.AppWidgetManager;
+          import android.appwidget.AppWidgetProvider;
+          import android.content.ComponentName;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.graphics.Color;
+          import android.os.Build;
+          import android.os.SystemClock;
+          import android.widget.RemoteViews;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          public class PrayerWidget extends AppWidgetProvider {
+              static final String TICK = "com.murhaf.meeqat.WIDGET_TICK";
+              static final String PREF = "meeqat_widget";
+
+              @Override
+              public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
+                  refresh(context, manager, ids);
+              }
+
+              @Override
+              public void onReceive(Context context, Intent intent) {
+                  super.onReceive(context, intent);
+                  if (intent != null && TICK.equals(intent.getAction())) {
+                      refreshAll(context);
+                  }
+              }
+
+              static void saveData(Context c, String json) {
+                  c.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString("data", json).apply();
+              }
+
+              static void refreshAll(Context c) {
+                  try {
+                      AppWidgetManager m = AppWidgetManager.getInstance(c);
+                      int[] ids = m.getAppWidgetIds(new ComponentName(c, PrayerWidget.class));
+                      if (ids != null && ids.length > 0) refresh(c, m, ids);
+                  } catch (Exception e) { }
+              }
+
+              static void refresh(Context c, AppWidgetManager m, int[] ids) {
+                  RemoteViews rv = new RemoteViews(c.getPackageName(), R.layout.widget_prayer);
+                  long now = System.currentTimeMillis();
+                  long nextT = 0;
+                  int[] nIds = {R.id.w_n0, R.id.w_n1, R.id.w_n2, R.id.w_n3, R.id.w_n4};
+                  int[] tIds = {R.id.w_t0, R.id.w_t1, R.id.w_t2, R.id.w_t3, R.id.w_t4};
+                  try {
+                      JSONObject root = new JSONObject(c.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString("data", "{}"));
+                      JSONArray items = root.optJSONArray("items");
+                      int idx = -1;
+                      if (items != null) {
+                          for (int i = 0; i < items.length(); i++) {
+                              if (items.getJSONObject(i).getLong("t") > now) {
+                                  idx = i;
+                                  break;
+                              }
+                          }
+                      }
+                      if (idx >= 0) {
+                          JSONObject nx = items.getJSONObject(idx);
+                          nextT = nx.getLong("t");
+                          rv.setTextViewText(R.id.w_label, root.optString("next", "الصلاة القادمة"));
+                          rv.setTextViewText(R.id.w_name, nx.optString("n"));
+                          rv.setTextViewText(R.id.w_time, nx.optString("tm"));
+                          rv.setChronometer(R.id.w_cd, SystemClock.elapsedRealtime() + (nextT - now), null, true);
+                          if (Build.VERSION.SDK_INT >= 24) {
+                              rv.setChronometerCountDown(R.id.w_cd, true);
+                          }
+                          String day = nx.optString("d");
+                          int col = 0;
+                          for (int i = 0; i < items.length() && col < 5; i++) {
+                              JSONObject it = items.getJSONObject(i);
+                              if (!day.equals(it.optString("d"))) continue;
+                              int color = it.getLong("t") == nextT ? Color.parseColor("#E3C07A") : Color.parseColor("#B3FFFFFF");
+                              rv.setTextViewText(nIds[col], it.optString("n"));
+                              rv.setTextViewText(tIds[col], it.optString("tm"));
+                              rv.setTextColor(nIds[col], color);
+                              rv.setTextColor(tIds[col], color);
+                              col++;
+                          }
+                      } else {
+                          rv.setTextViewText(R.id.w_label, root.optString("next", "الصلاة القادمة"));
+                          rv.setTextViewText(R.id.w_name, "افتح ميقات");
+                          rv.setTextViewText(R.id.w_time, "");
+                          rv.setChronometer(R.id.w_cd, SystemClock.elapsedRealtime(), null, false);
+                      }
+                  } catch (Exception e) { }
+
+                  Intent open = new Intent(c, MainActivity.class);
+                  open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  int imm = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
+                  PendingIntent pi = PendingIntent.getActivity(c, 77, open, PendingIntent.FLAG_UPDATE_CURRENT | imm);
+                  rv.setOnClickPendingIntent(R.id.w_root, pi);
+                  m.updateAppWidget(ids, rv);
+                  scheduleNext(c, nextT);
+              }
+
+              static void scheduleNext(Context c, long t) {
+                  try {
+                      AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+                      Intent in = new Intent(c, PrayerWidget.class);
+                      in.setAction(TICK);
+                      int imm = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
+                      PendingIntent pi = PendingIntent.getBroadcast(c, 78, in, PendingIntent.FLAG_UPDATE_CURRENT | imm);
+                      if (t <= 0) {
+                          am.cancel(pi);
+                          return;
+                      }
+                      long at = t + 1500L;
+                      if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) {
+                          am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+                      } else {
+                          am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+                      }
+                  } catch (Exception e) { }
+              }
+          }
+          JAVA_7
       - name: Android manifest (permissions, receivers, service)
         run: |
           python3 - <<'PY'
@@ -831,6 +966,12 @@ jobs:
                           <action android:name="android.intent.action.TIME_SET" />
                           <action android:name="android.intent.action.TIMEZONE_CHANGED" />
                       </intent-filter>
+                  </receiver>
+                  <receiver android:name=".PrayerWidget" android:exported="true" android:label="ميقات · الصلاة القادمة">
+                      <intent-filter>
+                          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                      </intent-filter>
+                      <meta-data android:name="android.appwidget.provider" android:resource="@xml/prayer_widget_info" />
                   </receiver>
                   <service android:name=".AdhanService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
           """
@@ -865,6 +1006,230 @@ jobs:
               open(d+'/ic_stat_meeqat.png','wb').write(base64.b64decode(v))
           print('icons written:',len(icons))
           PY
+      - name: Home-screen widget (layout, drawable, xml)
+        run: |
+          R=android/app/src/main/res
+          mkdir -p $R/layout $R/drawable $R/xml $R/values
+          cat > $R/layout/widget_prayer.xml <<'XML_0'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/w_root"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="@drawable/widget_bg"
+              android:layoutDirection="rtl"
+              android:orientation="vertical"
+              android:padding="14dp">
+
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:gravity="center_vertical"
+                  android:orientation="horizontal">
+
+                  <TextView
+                      android:id="@+id/w_label"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:text="الصلاة القادمة"
+                      android:textColor="#E3C07A"
+                      android:textSize="12sp" />
+
+                  <TextView
+                      android:id="@+id/w_time"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="05:09 ص"
+                      android:textColor="#CCFFFFFF"
+                      android:textSize="12sp" />
+              </LinearLayout>
+
+              <TextView
+                  android:id="@+id/w_name"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_marginTop="2dp"
+                  android:maxLines="1"
+                  android:text="الفجر"
+                  android:textColor="#FFFFFF"
+                  android:textSize="28sp"
+                  android:textStyle="bold" />
+
+              <Chronometer
+                  android:id="@+id/w_cd"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:gravity="start"
+                  android:text="00:10:22"
+                  android:textColor="#FFFFFF"
+                  android:textSize="22sp" />
+
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="0dp"
+                  android:layout_marginTop="8dp"
+                  android:layout_weight="1"
+                  android:gravity="bottom"
+                  android:orientation="horizontal"
+                  android:weightSum="5">
+
+                  <LinearLayout
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:gravity="center"
+                      android:orientation="vertical">
+
+                      <TextView
+                          android:id="@+id/w_n0"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="الفجر"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+
+                      <TextView
+                          android:id="@+id/w_t0"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="05:09"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+                  </LinearLayout>
+
+                  <LinearLayout
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:gravity="center"
+                      android:orientation="vertical">
+
+                      <TextView
+                          android:id="@+id/w_n1"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="الظهر"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+
+                      <TextView
+                          android:id="@+id/w_t1"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="11:59"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+                  </LinearLayout>
+
+                  <LinearLayout
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:gravity="center"
+                      android:orientation="vertical">
+
+                      <TextView
+                          android:id="@+id/w_n2"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="العصر"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+
+                      <TextView
+                          android:id="@+id/w_t2"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="03:04"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+                  </LinearLayout>
+
+                  <LinearLayout
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:gravity="center"
+                      android:orientation="vertical">
+
+                      <TextView
+                          android:id="@+id/w_n3"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="المغرب"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+
+                      <TextView
+                          android:id="@+id/w_t3"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="05:25"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+                  </LinearLayout>
+
+                  <LinearLayout
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:gravity="center"
+                      android:orientation="vertical">
+
+                      <TextView
+                          android:id="@+id/w_n4"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="العشاء"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+
+                      <TextView
+                          android:id="@+id/w_t4"
+                          android:layout_width="wrap_content"
+                          android:layout_height="wrap_content"
+                          android:text="06:40"
+                          android:textColor="#B3FFFFFF"
+                          android:textSize="11sp" />
+                  </LinearLayout>
+              </LinearLayout>
+          </LinearLayout>
+          XML_0
+          cat > $R/drawable/widget_bg.xml <<'XML_1'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <gradient
+                  android:angle="315"
+                  android:endColor="#03241C"
+                  android:startColor="#0B5D49" />
+              <corners android:radius="24dp" />
+              <stroke
+                  android:width="1dp"
+                  android:color="#47E3C07A" />
+          </shape>
+          XML_1
+          cat > $R/xml/prayer_widget_info.xml <<'XML_2'
+          <?xml version="1.0" encoding="utf-8"?>
+          <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+              android:description="@string/meeqat_widget_desc"
+              android:initialLayout="@layout/widget_prayer"
+              android:minHeight="110dp"
+              android:minWidth="250dp"
+              android:previewLayout="@layout/widget_prayer"
+              android:resizeMode="horizontal|vertical"
+              android:targetCellHeight="2"
+              android:targetCellWidth="4"
+              android:updatePeriodMillis="1800000"
+              android:widgetCategory="home_screen" />
+          XML_2
+          cat > $R/values/meeqat_widget.xml <<'XML_3'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="meeqat_widget_desc">الصلاة القادمة والوقت المتبقي</string>
+          </resources>
+          XML_3
       - name: Fixed signing and version
         run: |
           python3 - <<'PY'
