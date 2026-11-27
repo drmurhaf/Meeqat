@@ -121,6 +121,14 @@ html[dir=rtl] .qbtn .qch{transform:rotate(135deg)}
 .hero .hq{position:absolute;z-index:3;top:8px;inset-inline-end:8px;width:34px;height:34px;padding:0;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:19px;line-height:1;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.42);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);cursor:pointer;transition:transform .15s,background .2s}
 .hero .hq:hover{background:rgba(255,255,255,.28)}
 .hero .hq:active{transform:scale(.9)}
+.vb{margin:18px 4px 4px;text-align:center;font-size:11.5px;color:var(--mut);direction:ltr;unicode-bidi:plaintext}
+.shl{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
+.bkg{display:flex;gap:6px}
+.bkb{font:inherit;font-size:12.5px;font-weight:700;line-height:1;padding:8px 10px;border-radius:12px;background:var(--soft);color:var(--ac);border:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:transform .12s,background .2s}
+.bkb:hover{background:var(--card)}
+.bkb:active{transform:scale(.94)}
+.bkt{position:fixed;z-index:80;left:50%;bottom:96px;transform:translate(-50%,16px);max-width:86vw;text-align:center;background:#0b5d49;color:#fff;font-weight:700;font-size:14px;padding:11px 18px;border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s}
+.bkt.on{opacity:1;transform:translate(-50%,0)}
 .pvb{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:9px;transition:background .25s,color .25s,box-shadow .25s}
 .pvb::before{content:"";position:absolute;top:0;bottom:0;inset-inline-start:0;width:var(--p,0%);background:rgba(255,255,255,.24);transition:width .12s linear;pointer-events:none}
 .pvb.on{background:var(--ac);color:#fff;box-shadow:0 6px 18px -8px var(--ac)}
@@ -499,6 +507,49 @@ function nativeSchedule(){
     }})}
   try{NATIVE_AD.schedule({items:trObj(items)}).then(r=>{NAT=!!(r&&r.scheduled>0&&r.exact)}).catch(()=>{NAT=false})}catch(e){NAT=false}
 }
+/* رقم نسخة الصفحة ورقم بناء التطبيق (للتأكد مما هو مثبّت) */
+const PAGE_BUILD="27.11.b4";
+async function verFill(){
+  const el=document.getElementById("vb");if(!el)return;
+  let n="";
+  if(NATIVE_AD){try{const r=await NATIVE_AD.getInfo();n=" · "+qT("بناء التطبيق","App build")+" #"+(r&&r.code!=null?r.code:"?")}catch(e){n=" · "+qT("بناء التطبيق: قديم","App build: old")}}
+  const e2=document.getElementById("vb");if(e2)e2.textContent=qT("نسخة الصفحة ","Page ")+PAGE_BUILD+n;
+}
+/* ===== نسخة احتياطية محلية: حفظ واستيراد ===== */
+function bkToast(msg){
+  let t=document.getElementById("bkt");if(!t){t=document.createElement("div");t.id="bkt";t.className="bkt";document.body.appendChild(t)}
+  t.textContent=msg;t.classList.add("on");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("on"),3800);
+}
+async function bkExport(){
+  const name="meeqat-backup-"+key(new Date())+".json",txt=JSON.stringify({app:"meeqat",v:1,at:new Date().toISOString(),data:S},null,1);
+  if(NATIVE_AD&&NATIVE_AD.saveBackup){
+    try{const r=await NATIVE_AD.saveBackup({name,data:txt});bkToast(r&&r.saved?qT("✓ تم حفظ النسخة الاحتياطية","✓ Backup saved"):qT("تم إلغاء الحفظ","Save cancelled"))}
+    catch(e){bkToast(qT("تعذّر حفظ النسخة الاحتياطية","Could not save the backup"))}
+    return;
+  }
+  try{
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);bkToast(qT("✓ تم حفظ النسخة الاحتياطية","✓ Backup saved"));
+  }catch(e){bkToast(qT("تعذّر حفظ النسخة الاحتياطية","Could not save the backup"))}
+}
+async function bkImport(){
+  let txt=null;
+  if(NATIVE_AD&&NATIVE_AD.pickBackup){
+    try{const r=await NATIVE_AD.pickBackup();if(!r||!r.data)return;txt=r.data}catch(e){bkToast(qT("تعذّر قراءة الملف","Could not read the file"));return}
+  }else{
+    txt=await new Promise(res=>{const i=document.createElement("input");i.type="file";i.accept=".json,application/json";i.onchange=()=>{const f=i.files&&i.files[0];if(!f)return res(null);const fr=new FileReader();fr.onload=()=>res(String(fr.result));fr.onerror=()=>res(null);fr.readAsText(f)};i.click()});
+  }
+  if(!txt)return;
+  let o;try{o=JSON.parse(txt)}catch(e){bkToast(qT("الملف غير صالح","Invalid file"));return}
+  if(!(o&&o.app==="meeqat"&&o.data&&typeof o.data==="object"&&!Array.isArray(o.data))){bkToast(qT("هذا ليس ملف نسخة احتياطية من ميقات","This is not a Meeqat backup file"));return}
+  const cnt=x=>{let n=0;for(const k in (x.log||{}))n+=Object.keys(x.log[k]||{}).length;return n},dt=o.at?String(o.at).slice(0,10):"";
+  const msg=qT("سيتم استبدال بياناتك الحالية ("+cnt(S)+" صلاة مسجلة) بالنسخة المحفوظة ("+cnt(o.data)+" صلاة"+(dt?" · "+dt:"")+"). هل تريد المتابعة؟",
+               "Your current data ("+cnt(S)+" logged prayers) will be replaced by the backup ("+cnt(o.data)+" prayers"+(dt?" · "+dt:"")+"). Continue?");
+  if(!confirm(msg))return;
+  o.data.amFrom=key(new Date());           // لا تُسجَّل فوائت للأيام بين تاريخ النسخة واليوم
+  Object.keys(S).forEach(k=>delete S[k]);Object.assign(S,o.data);save();
+  bkToast(qT("✓ تم استيراد النسخة الاحتياطية","✓ Backup imported"));setTimeout(()=>location.reload(),700);
+}
 /* ===== بوصلة القبلة ===== */
 const KAABA={lat:21.422487,lng:39.826206};
 const qT=(ar,en)=>LANG_EN?en:ar;
@@ -760,7 +811,7 @@ $("gear").onclick=()=>{
   };
   const draw=()=>{
     const sc0=document.querySelector(".fs-b"),top=sc0?sc0.scrollTop:0;
-    openSheet('<div class="fs-h"><div class="fs-in"><div class="shd"><h2>الإعدادات</h2><button class="cls" id="cl" aria-label="إغلاق">✕</button></div><div class="s" style="margin:0 0 4px">الموقع وطريقة الحساب والتنبيهات</div></div></div>'+
+    openSheet('<div class="fs-h"><div class="fs-in"><div class="shd"><div class="shl"><h2>الإعدادات</h2><div class="bkg"><button class="bkb" id="bkx" type="button" title="'+qT("حفظ نسخة احتياطية محلية من بياناتك","Save a local backup of your data")+'">💾 '+qT("حفظ","Save")+'</button><button class="bkb" id="bki" type="button" title="'+qT("استيراد نسخة محفوظة","Import a saved backup")+'">📥 '+qT("استيراد","Import")+'</button></div></div><button class="cls" id="cl" aria-label="إغلاق">✕</button></div><div class="s" style="margin:0 0 4px">الموقع وطريقة الحساب والتنبيهات</div></div></div>'+
     '<div class="fs-b"><div class="fs-in">'+
     profCard()+
     card("loc","📍","الموقع وحساب الأوقات",(d.mode=="auto"?"تلقائي":"يدوي")+" · "+d.city,'<div class="row"><label>تحديد الموقع تلقائياً</label><button class="sw '+(d.mode=="auto"?"on":"")+'" id="am"></button></div>'+
@@ -773,10 +824,11 @@ $("gear").onclick=()=>{
     card("pre","⏰","تنبيهات قبل الصلاة وعدم التسجيل",(d.pre?d.pre+" دقيقة قبل الصلاة":"بدون تنبيه قبل الصلاة"),'<div class="row"><label>تنبيه قبل الصلاة</label></div><select id="pr">'+[0,5,10,15,20].map(m=>'<option value="'+m+'" '+((d.pre||0)==m?"selected":"")+'>'+(m?m+" دقيقة قبل الصلاة":"بدون")+'</option>').join("")+'</select>'+((d.pre||0)>0?('<div class="row"><label>نغمة التنبيه قبل الصلاة</label></div><select id="sp">'+PRESND.map(s=>'<option value="'+s[0]+'" '+(d.sndPre==s[0]?"selected":"")+'>'+s[1]+'</option>').join("")+'</select>'+(d.sndPre=="custom"?'<div class="row"><label>'+(d.sndPreName?("الملف: "+d.sndPreName):"لم يُختر ملف بعد")+'</label></div><input type="file" id="sf2" accept="audio/*">':"")+'<button class="btn g pvb'+(PVID=="pv2"?" on":"")+'" id="pv2" style="margin-top:8px">'+pvLabel(PVID=="pv2")+'</button>'):"")+postSndUI(d)+'<div class="toast">🔔 تذكير تلقائي إن لم تسجّل الصلاة: بعد 20 دقيقة، بعد ساعة، وقبل انتهاء وقتها بـ 10 دقائق</div>')+
     card("bg","📱",NATIVE_AD?"الأذان على أندرويد والخلفية":"التشغيل في الخلفية",(d.ka!==false?"التشغيل في الخلفية مفعّل":"التشغيل في الخلفية متوقف"),'<div class="row"><label>إبقاء التنبيه يعمل في الخلفية</label><button class="sw '+(d.ka!==false?"on":"")+'" id="kab"></button></div><div class="toast">يشغّل صوتاً صامتاً غير مسموع ليبقى المتصفح نشطاً وقت الأذان (قد يظهر إشعار وسائط، ويستهلك بطارية أكثر قليلاً)</div>'+(NATIVE_AD?'<div class="row"><label>إيقاف الصوت بقلب الجوال على وجهه</label><button class="sw '+(d.flip!==false?"on":"")+'" id="flp"></button></div><div class="toast" style="margin-top:0">عند قلب الهاتف على وجهه يتوقف الأذان ونغمات التنبيه فوراً.</div>':"")+(NATIVE_AD?'<div class="row"><label>صلاحيات الأذان على أندرويد</label></div><div class="toast" style="margin-top:0">فعّلها ليظهر الأذان فوق التطبيقات والشاشة المقفلة.</div><div id="pmx" class="pmx">جارٍ قراءة الحالة…</div>':""))+
     '<div class="sec">البيانات</div>'+(d._rc?'<div class="toast" style="color:var(--bad);font-weight:700">⚠️ سيتم حذف كل سجل الصلوات نهائياً. للتأكيد اكتب كلمة «حذف» ثم اضغط تأكيد.</div><input id="rsw" type="text" autocomplete="off" placeholder="اكتب: حذف" style="margin-top:8px"><div class="two" style="margin-top:8px"><button class="btn dng cf" id="rst2" style="margin-top:0;opacity:.45" disabled>تأكيد الحذف</button><button class="btn g" id="rsx" style="margin-top:0">إلغاء</button></div>':'<button class="btn dng" id="rst" style="margin-top:0">🗑 حذف وتصفير سجل الصلوات السابقة</button>')+'<div class="toast">يحذف كل ما سجّلته من الصلوات السابقة والفائتة والنقاط ليبدأ العدّ من الصفر. إعداداتك لا تتغيّر، ولا يمكن التراجع.</div>'+
-    '</div></div><div class="fs-f"><div class="fs-in"><button class="btn" id="sv">حفظ التغييرات</button></div></div>');
+    '<div class="vb" id="vb"></div></div></div><div class="fs-f"><div class="fs-in"><button class="btn" id="sv">حفظ التغييرات</button></div></div>');
     $("sheet").classList.add("full");$("ov").classList.add("full");
     const sc1=document.querySelector(".fs-b");if(sc1)sc1.scrollTop=top;
     if(NATIVE_AD)permFill();
+    verFill();
   };
   draw();
   const sh=$("sheet");
@@ -785,6 +837,8 @@ $("gear").onclick=()=>{
   sh.onchange=async e=>{if(e.target.id=="pf_cal"){S.cal=e.target.value;save();try{hist();stats();render()}catch(err){}return}if(e.target.id=="pf_lg"){S.lang=e.target.value;save();location.reload();return}if(e.target.id=="pf_th"){S.theme=e.target.value;d.theme=S.theme;applyTheme(S.theme);save();return}if(e.target.id=="pr"){grab();if(!d.pre&&PVID=="pv2")stopSound();draw();return}if(e.target.id=="sd"){grab();draw();return}if(e.target.id=="sp"||e.target.id.slice(0,3)=="sp_"){grab();draw();return}if(e.target.id.slice(0,3)=="sf_"){const sb=e.target.id.slice(3),q=PSUB.find(x=>x[0]==sb);const f=e.target.files[0];if(!f||!q)return;if(f.size>15*1024*1024){$("ts").textContent="الملف كبير، اختر ملفاً أقل من 15 ميغابايت";return}try{await idbSet("snd"+sb,f);d["snd"+q[1]+"Name"]=f.name;grab();draw();$("ts").textContent="تم اختيار الملف ✓"}catch(err){$("ts").textContent="تعذّر حفظ الملف"}return}if(e.target.id=="sf2"){const f=e.target.files[0];if(!f)return;if(f.size>15*1024*1024){$("ts").textContent="الملف كبير، اختر ملفاً أقل من 15 ميغابايت";return}try{await idbSet("sndpre",f);d.sndPreName=f.name;grab();draw();$("ts").textContent="تم اختيار الملف ✓"}catch(err){$("ts").textContent="تعذّر حفظ الملف"}return}if(e.target.id=="sf"){const f=e.target.files[0];if(!f)return;if(f.size>15*1024*1024){$("ts").textContent="الملف كبير، اختر ملفاً أقل من 15 ميغابايت";return}try{await idbSet("snd",f);d.sndName=f.name;grab();draw();$("ts").textContent="تم اختيار الملف ✓"}catch(err){$("ts").textContent="تعذّر حفظ الملف"}return}if(e.target.id=="ct"){const v=e.target.value;if(v!="_"){grab();const c=CITIES[v];d.city=v;d.lat=c[0];d.lng=c[1];d.mode="manual";draw()}}};
   sh.onclick=async ev=>{
     const id=ev.target.id;
+    if(ev.target.closest("#bkx")){bkExport();return}
+    if(ev.target.closest("#bki")){bkImport();return}
     const hd=ev.target.closest(".cd-h");if(hd){const k=hd.dataset.c;d.open=Object.assign({},d.open);d.open[k]=!d.open[k];hd.parentElement.classList.toggle("open",!!d.open[k]);return}
     const ps=ev.target.closest("[data-ps]");if(ps&&NATIVE_AD){try{NATIVE_AD.openSettings({type:ps.dataset.ps}).catch(()=>{})}catch(e){}return}
     if(id=="psr"){permFill();return}
