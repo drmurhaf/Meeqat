@@ -818,19 +818,6 @@ jobs:
                       bat = pm.isIgnoringBatteryOptimizations(c.getPackageName());
                   }
                   r.put("battery", bat);
-                  int dnd = 0;
-                  boolean dndAl = true;
-                  try {
-                      if (Build.VERSION.SDK_INT >= 23) {
-                          NotificationManager dm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
-                          dnd = dm.getCurrentInterruptionFilter();
-                          if (Build.VERSION.SDK_INT >= 28) {
-                              dndAl = (dm.getNotificationPolicy().priorityCategories & NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS) != 0;
-                          }
-                      }
-                  } catch (Exception e) { }
-                  r.put("dnd", dnd);
-                  r.put("dndAlarms", dndAl);
                   call.resolve(r);
               }
 
@@ -852,14 +839,6 @@ jobs:
                           }
                       } else if ("battery".equals(type)) {
                           in = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + pkg));
-                      } else if ("dnd".equals(type)) {
-                          String[] dndActs = {"android.settings.ZEN_MODE_SETTINGS", "android.settings.ZEN_MODE_PRIORITY_SETTINGS", Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS};
-                          for (String act : dndActs) {
-                              try {
-                                  getActivity().startActivity(new Intent(act));
-                                  break;
-                              } catch (Exception z) { }
-                          }
                       } else if ("notif".equals(type)) {
                           SharedPreferences sp = getContext().getSharedPreferences(AdhanScheduler.PREF, Context.MODE_PRIVATE);
                           boolean asked = sp.getBoolean("np_asked", false);
