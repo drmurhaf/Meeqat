@@ -1,11 +1,18 @@
 name: Build APK
 on:
   workflow_dispatch:
+    inputs:
+      notes:
+        description: 'ملاحظات التحديث (اختياري، وإلا تُستخدم رسالة آخر تعديل)'
+        required: false
+        default: ''
   push:
     branches: [main, master]
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: meeqat-apk
@@ -1744,3 +1751,21 @@ jobs:
         with:
           name: meeqat-apk
           path: meeqat-apk/android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish GitHub Release (manual run, or [release] in the commit message)
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: v${{ github.run_number }}
+          INPUT_NOTES: ${{ github.event.inputs.notes }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk "meeqat-$TAG.apk"
+          if [ -n "$INPUT_NOTES" ]; then
+            NOTES="$INPUT_NOTES"
+          else
+            NOTES="$(git log -1 --pretty=%B | sed 's/\[release\]//Ig' | sed -e 's/[[:space:]]*$//')"
+          fi
+          if [ -z "$NOTES" ]; then NOTES="تحديث جديد لتطبيق ميقات"; fi
+          printf '%s\n' "$NOTES" > release-notes.txt
+          gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh release create "$TAG" "meeqat-$TAG.apk" --title "ميقات $TAG" --notes-file release-notes.txt --target "$GITHUB_SHA"
