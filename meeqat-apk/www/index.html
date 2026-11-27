@@ -473,6 +473,16 @@ function nativeSchedule(){
     }})}
   try{NATIVE_AD.schedule({items:trObj(items)}).then(r=>{NAT=!!(r&&r.scheduled>0&&r.exact)}).catch(()=>{NAT=false})}catch(e){NAT=false}
 }
+let NWSIG="";
+/* بيانات ويدجت الشاشة الرئيسية (بطاقة الصلاة القادمة) */
+function nativeWidget(){
+  if(!NATIVE_AD||!T.length)return;
+  const sig=[TD,S.tf,S.lat,S.lng,S.method,S.asr,LANG_EN].join("|");
+  if(sig===NWSIG)return;NWSIG=sig;
+  const items=[];
+  for(let g=0;g<=8;g++){const x=new Date();x.setHours(12,0,0,0);x.setDate(x.getDate()+g);const dk=key(x),tt=g==0?T:times(new Date(x));tt.forEach(p=>items.push({t:+p.s,k:p.k,n:p.n,tm:fmt(p.s),d:dk}))}
+  try{NATIVE_AD.setWidgetData({data:trObj({next:"الصلاة القادمة",items})}).catch(()=>{})}catch(e){}
+}
 let NOPT="";
 function nativeOpts(){
   if(!NATIVE_AD)return;
@@ -554,7 +564,7 @@ function setGreet(){
 addEventListener("resize",()=>{GK="";try{setGreet()}catch(e){}});
 try{document.fonts&&document.fonts.ready.then(()=>{GK="";try{setGreet()}catch(e){}})}catch(e){}
 function render(){
-  ensure();try{setGreet()}catch(e){}autoMiss();nativeSchedule();nativeDone();nativeOpts();const now=new Date(),k=key(now),log=S.log[k]||{};
+  ensure();try{setGreet()}catch(e){}autoMiss();nativeSchedule();nativeDone();nativeOpts();nativeWidget();const now=new Date(),k=key(now),log=S.log[k]||{};
   $("sub").textContent=now.toLocaleDateString(CALLOC(),{weekday:"long",day:"numeric",month:"long"})+" · "+(S.city=="موقعي الحالي"&&S.locName?S.locName:S.city);
   let cur=-1;T.forEach((p,i)=>{if(now>=p.s)cur=i});
   $("list").innerHTML=T.map((p,i)=>{
