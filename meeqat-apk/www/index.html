@@ -236,6 +236,11 @@ header{padding:4px 0}
 
 /* عداد الصلاة القادمة: بدون خلفية */
 .hero .cd{background:none;border:0;border-radius:0;box-shadow:none;margin:0;overflow:visible;transition:none;padding:0;font-size:24px;font-weight:700;letter-spacing:.5px;line-height:1.2;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.55)}
+
+/* التحديثات (GitHub Releases) */
+.gw .udot{position:absolute;top:-3px;inset-inline-end:-3px;width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid var(--bg);display:none;pointer-events:none;z-index:7}
+.gw .udot.on{display:block}
+.upn{margin:8px 0 0;padding:10px 12px;background:var(--soft);color:var(--tx);border-radius:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;word-break:break-word;max-height:170px;overflow:auto}
 </style>
 </head>
 <body>
@@ -537,12 +542,114 @@ function nativeSchedule(){
   try{NATIVE_AD.schedule({items:trObj(items)}).then(r=>{NAT=!!(r&&r.scheduled>0&&r.exact)}).catch(()=>{NAT=false})}catch(e){NAT=false}
 }
 /* رقم نسخة الصفحة ورقم بناء التطبيق (للتأكد مما هو مثبّت) */
-const PAGE_BUILD="27.11.b4";
+const PAGE_BUILD="28.11.b1";
 async function verFill(){
   const el=document.getElementById("vb");if(!el)return;
   let n="";
   if(NATIVE_AD){try{const r=await NATIVE_AD.getInfo();n=" · "+qT("بناء التطبيق","App build")+" #"+(r&&r.code!=null?r.code:"?")}catch(e){n=" · "+qT("بناء التطبيق: قديم","App build: old")}}
   const e2=document.getElementById("vb");if(e2)e2.textContent=qT("نسخة الصفحة ","Page ")+PAGE_BUILD+n;
+}
+/* ===== التحديثات عبر GitHub Releases (مجاني، بدون سيرفر) ===== */
+const UPD_REPO="drmurhaf/meeqat",UPD_KEY="salat_upd",UPD_EVERY=12*36e5,UPD_SNOOZE=3*864e5;
+let UPD=(()=>{try{const x=JSON.parse(localStorage.getItem(UPD_KEY)||"null");return x&&typeof x==="object"?x:{}}catch(e){return{}}})();
+const updSave=()=>{try{localStorage.setItem(UPD_KEY,JSON.stringify(UPD))}catch(e){}};
+const updEsc=x=>String(x==null?"":x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let UCUR=null,UCURP=false,USTAT="",UAUTO=false;
+/* رقم البناء المثبّت (versionCode) من الإضافة الأصلية؛ null خارج التطبيق أو في النسخ القديمة */
+async function updCur(){
+  if(UCUR!=null)return UCUR;
+  if(!NATIVE_AD)return null;
+  try{const r=await NATIVE_AD.getInfo();const c=Number(r&&r.code);if(c>0)UCUR=c}catch(e){}
+  return UCUR;
+}
+/* الإصدار الأحدث المعروف والأعلى من المثبّت (من آخر فحص ناجح) */
+function updPending(){return(UCUR!=null&&UPD.rel&&UPD.rel.code>UCUR)?UPD.rel:null}
+async function updFetch(){
+  const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),10000);
+  try{
+    const r=await fetch("https://api.github.com/repos/"+UPD_REPO+"/releases/latest",{headers:{Accept:"application/vnd.github+json"},signal:ctl.signal,cache:"no-store"});
+    if(!r.ok)throw new Error("http "+r.status);
+    const j=await r.json();
+    const code=parseInt(String(j.tag_name||"").replace(/\D/g,""),10);
+    const a=(j.assets||[]).find(x=>/\.apk$/i.test(x.name||""));
+    if(!(code>0)||!a||!a.browser_download_url)throw new Error("bad release");
+    return{code,tag:String(j.tag_name),notes:String(j.body||"").trim().slice(0,4000),url:a.browser_download_url,size:a.size||0};
+  }finally{clearTimeout(t)}
+}
+function updDot(){
+  const g=document.querySelector(".gw");if(!g)return;
+  let d=document.getElementById("udot");
+  if(!d){d=document.createElement("i");d.id="udot";d.className="udot";g.appendChild(d)}
+  d.classList.toggle("on",!!updPending());
+}
+function updDownload(rel){
+  const u=rel&&rel.url;if(!u)return;
+  try{window.open(u,"_blank")}catch(e){try{location.href=u}catch(e2){}}
+}
+function updDialog(rel){
+  openSheet('<h2>'+qT("🔔 تحديث جديد","🔔 New update")+'</h2><div class="s">'+qT("يتوفر إصدار أحدث من ميقات","A newer version of Meeqat is available")+' · #'+rel.code+(rel.size?' · '+(rel.size/1048576).toFixed(1)+' MB':'')+'</div>'+
+    (rel.notes?'<div class="upn">'+updEsc(rel.notes)+'</div>':'')+
+    '<div class="toast">'+qT("يُثبَّت فوق نسختك الحالية وتبقى بياناتك كما هي. يمكنك أيضاً تنزيله لاحقاً من الإعدادات › التحديثات.","It installs over your current version and keeps your data. You can also download it later from Settings › Updates.")+'</div>'+
+    '<div class="two" style="margin-top:6px"><button class="btn" id="uup" type="button">'+qT("تحديث الآن","Update now")+'</button><button class="btn g" id="ulr" type="button">'+qT("لاحقاً","Later")+'</button></div>');
+  $("sheet").onclick=ev=>{
+    const id=ev.target&&ev.target.id;
+    if(id=="uup"){closeSheet();updDownload(rel)}
+    else if(id=="ulr")closeSheet();
+  };
+}
+/* فحص تلقائي: عند فتح التطبيق أو العودة إليه، بحد أقصى مرة كل 12 ساعة */
+async function updAuto(){
+  if(UAUTO||!NATIVE_AD)return;UAUTO=true;
+  try{
+    const cur=await updCur();if(cur==null)return;
+    if(UPD.rel&&UPD.rel.code<=cur){UPD.rel=null;UPD.later=null;updSave()}
+    const now=Date.now();
+    if(!UPD.chk||UPD.chk>now||now-UPD.chk>=UPD_EVERY){
+      try{const rel=await updFetch();UPD.chk=Date.now();UPD.rel=rel.code>cur?rel:null;if(!UPD.rel)UPD.later=null;updSave()}catch(e){}
+    }
+    updDot();
+    const rel=updPending();if(!rel)return;
+    if(UPD.later&&UPD.later.code===rel.code&&Date.now()<UPD.later.until)return;
+    const ov=document.getElementById("ov"),aw=document.getElementById("aw");
+    if((ov&&ov.classList.contains("on"))||(aw&&aw.classList.contains("on")))return;
+    UPD.later={code:rel.code,until:Date.now()+UPD_SNOOZE};updSave();
+    updDialog(rel);
+  }catch(e){}finally{UAUTO=false}
+}
+/* فحص يدوي من الإعدادات */
+async function updManual(){
+  if(USTAT=="busy")return;
+  USTAT="busy";updPaint();
+  const cur=await updCur();
+  if(cur==null){USTAT="err";updPaint();return}
+  try{
+    const rel=await updFetch();
+    UPD.chk=Date.now();UPD.rel=rel.code>cur?rel:null;if(!UPD.rel)UPD.later=null;updSave();
+    USTAT=UPD.rel?"new":"ok";
+  }catch(e){USTAT="err"}
+  updDot();updPaint();
+}
+/* قسم «التحديثات» في الإعدادات */
+function updSum(){return updPending()?qT("⬆ يتوفر تحديث جديد","⬆ Update available"):qT("الإصدار الحالي: ","Current version: ")+(UCUR!=null?"#"+UCUR:"—")}
+function updBody(){
+  return '<div class="row"><label>'+qT("الإصدار الحالي","Current version")+'</label><b id="upcur" dir="ltr">—</b></div>'+
+    '<div class="toast" id="upst"></div><div class="upn" id="upn" style="display:none"></div>'+
+    '<div class="two" style="margin-bottom:14px"><button class="btn g" id="upc" type="button">'+qT("التحقق من تحديث","Check for update")+'</button><button class="btn" id="upd" type="button" style="display:none">'+qT("تنزيل","Download")+'</button></div>';
+}
+function updPaint(){
+  const c=document.getElementById("upcur");if(!c)return;
+  if(UCUR==null&&!UCURP){UCURP=true;updCur().then(()=>{updPaint();updDot()})}
+  c.textContent=UCUR!=null?"#"+UCUR:"—";
+  const rel=updPending(),st=document.getElementById("upst"),n=document.getElementById("upn"),bd=document.getElementById("upd"),bc=document.getElementById("upc");
+  let msg="";
+  if(USTAT=="busy")msg=qT("جارٍ التحقق من التحديثات…","Checking for updates…");
+  else if(rel)msg=qT("⬆ يتوفر إصدار أحدث: #","⬆ A newer version is available: #")+rel.code+(rel.size?" · "+(rel.size/1048576).toFixed(1)+" MB":"");
+  else if(USTAT=="err")msg=qT("تعذّر التحقق، تأكد من اتصالك بالإنترنت","Couldn't check; check your internet connection");
+  else if(USTAT=="ok")msg=qT("✓ أنت على آخر إصدار","✓ You're on the latest version");
+  if(st){st.textContent=msg;st.style.color=rel?"var(--ac)":"";st.style.fontWeight=rel?"700":""}
+  if(n){if(rel&&rel.notes){n.textContent=rel.notes;n.style.display="block"}else n.style.display="none"}
+  if(bd){bd.style.display=rel?"":"none";if(bd.parentElement)bd.parentElement.style.gridTemplateColumns=rel?"":"1fr"}
+  if(bc){bc.disabled=USTAT=="busy";bc.style.opacity=USTAT=="busy"?".6":""}
 }
 /* ===== نسخة احتياطية محلية: حفظ واستيراد ===== */
 function bkToast(msg){
@@ -975,12 +1082,13 @@ $("gear").onclick=()=>{
     card("snd","🔊","تنبيه وقت الصلاة",(d.notif?((SNDS.find(x=>x[0]==d.snd)||[0,""])[1])+" · مفعّلة":"التنبيهات متوقفة"),'<div class="row"><label>تنبيهات أوقات الصلاة</label><button class="sw '+(d.notif?"on":"")+'" id="nt"></button></div>'+(d.notif?'':'<div class="toast" style="margin-top:0">التنبيهات متوقفة: لن يصدر أي صوت أو إشعار عند دخول وقت الصلاة.</div>')+(d.notif?('<div class="row"><label>صوت التنبيه</label></div><select id="sd">'+SNDS.map(s=>'<option value="'+s[0]+'" '+(d.snd==s[0]?"selected":"")+'>'+s[1]+'</option>').join("")+'</select>'+(d.snd=="custom"?'<div class="row"><label>'+(d.sndName?("الملف: "+d.sndName):"لم يُختر ملف بعد")+'</label></div><input type="file" id="sf" accept="audio/*">':"")+'<button class="btn g pvb'+(PVID=="pv"?" on":"")+'" id="pv" style="margin-top:8px">'+pvLabel(PVID=="pv")+'</button>'+(d.snd!="off"?'<div class="row"><label>تفعيل التنبيه لكل صلاة</label></div>'+NAMES.map(n=>'<div class="row"><label>'+n[1]+'</label><button class="sw '+((d.pm||{})[n[0]]!==false?"on":"")+'" id="pm_'+n[0]+'"></button></div>').join(""):"")):""))+
     card("pre","⏰","تنبيهات قبل الصلاة وعدم التسجيل",(d.pre?d.pre+" دقيقة قبل الصلاة":"بدون تنبيه قبل الصلاة"),'<div class="row"><label>تنبيه قبل الصلاة</label></div><select id="pr">'+[0,5,10,15,20].map(m=>'<option value="'+m+'" '+((d.pre||0)==m?"selected":"")+'>'+(m?m+" دقيقة قبل الصلاة":"بدون")+'</option>').join("")+'</select>'+((d.pre||0)>0?('<div class="row"><label>نغمة التنبيه قبل الصلاة</label></div><select id="sp">'+PRESND.map(s=>'<option value="'+s[0]+'" '+(d.sndPre==s[0]?"selected":"")+'>'+s[1]+'</option>').join("")+'</select>'+(d.sndPre=="custom"?'<div class="row"><label>'+(d.sndPreName?("الملف: "+d.sndPreName):"لم يُختر ملف بعد")+'</label></div><input type="file" id="sf2" accept="audio/*">':"")+'<button class="btn g pvb'+(PVID=="pv2"?" on":"")+'" id="pv2" style="margin-top:8px">'+pvLabel(PVID=="pv2")+'</button>'):"")+postSndUI(d)+'<div class="toast">🔔 تذكير تلقائي إن لم تسجّل الصلاة: بعد 20 دقيقة، بعد ساعة، وقبل انتهاء وقتها بـ 10 دقائق</div>')+
     card("bg","📱",NATIVE_AD?"الأذونات":"التشغيل في الخلفية",(d.ka!==false?"التشغيل في الخلفية مفعّل":"التشغيل في الخلفية متوقف"),'<div class="row"><label>إبقاء التنبيه يعمل في الخلفية</label><button class="sw '+(d.ka!==false?"on":"")+'" id="kab"></button></div><div class="toast">يشغّل صوتاً صامتاً غير مسموع ليبقى المتصفح نشطاً وقت الأذان (قد يظهر إشعار وسائط، ويستهلك بطارية أكثر قليلاً)</div>'+(NATIVE_AD?'<div class="row"><label>إيقاف الصوت بقلب الجوال على وجهه</label><button class="sw '+(d.flip!==false?"on":"")+'" id="flp"></button></div><div class="toast" style="margin-top:0">عند قلب الهاتف على وجهه يتوقف الأذان ونغمات التنبيه فوراً.</div>':"")+(NATIVE_AD?'<div class="row"><label>صلاحيات الأذان على أندرويد</label></div><div class="toast" style="margin-top:0">فعّلها ليظهر الأذان فوق التطبيقات والشاشة المقفلة.</div><div id="pmx" class="pmx">جارٍ قراءة الحالة…</div>':""))+
+    (NATIVE_AD?card("upd","⬆️",qT("التحديثات","Updates"),updSum(),updBody()):"")+
     '<div class="sec">البيانات</div>'+(d._rc?'<div class="toast" style="color:var(--bad);font-weight:700">⚠️ سيتم حذف كل سجل الصلوات نهائياً. للتأكيد اكتب كلمة «حذف» ثم اضغط تأكيد.</div><input id="rsw" type="text" autocomplete="off" placeholder="اكتب: حذف" style="margin-top:8px"><div class="two" style="margin-top:8px"><button class="btn dng cf" id="rst2" style="margin-top:0;opacity:.45" disabled>تأكيد الحذف</button><button class="btn g" id="rsx" style="margin-top:0">إلغاء</button></div>':'<button class="btn dng" id="rst" style="margin-top:0">🗑 حذف وتصفير سجل الصلوات السابقة</button>')+'<div class="toast">يحذف كل ما سجّلته من الصلوات السابقة والفائتة والنقاط ليبدأ العدّ من الصفر. إعداداتك لا تتغيّر، ولا يمكن التراجع.</div>'+
     '<div class="vb" id="vb"></div></div></div><div class="fs-f"><div class="fs-in"><button class="btn" id="sv">حفظ التغييرات</button></div></div>');
     $("sheet").classList.add("full");$("ov").classList.add("full");
     const sc1=document.querySelector(".fs-b");if(sc1)sc1.scrollTop=top;
     if(NATIVE_AD)permFill();
-    verFill();
+    verFill();updPaint();
   };
   draw();
   const sh=$("sheet");
@@ -994,6 +1102,7 @@ $("gear").onclick=()=>{
     const hd=ev.target.closest(".cd-h");if(hd){const k=hd.dataset.c;d.open=Object.assign({},d.open);d.open[k]=!d.open[k];hd.parentElement.classList.toggle("open",!!d.open[k]);return}
     const ps=ev.target.closest("[data-ps]");if(ps&&NATIVE_AD){try{NATIVE_AD.openSettings({type:ps.dataset.ps}).catch(()=>{})}catch(e){}return}
     if(id=="psr"){permFill();return}
+    if(id=="upc"){updManual();return}if(id=="upd"){updDownload(updPending());return}
     if(id=="pv"||id=="pv2"||id.slice(0,3)=="pv_"){
       if(PVID==id){stopSound();if(id=="pv")closeAdhan(false);return}
       grab();
@@ -1032,7 +1141,7 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden){try{ensur
 if(NATIVE_AD)setInterval(()=>{try{NATIVE_AD.state().then(st=>{const w=document.getElementById("aw"),open=!!(w&&w.classList.contains("on"));
   if(st&&st.playing){if(!open&&st.key!==NDIS){const p=T.find(x=>x.k===st.key);if(p)showAdhan(p,S.snd,true)}}
   else{NDIS="";if(open&&NATWIN)closeAdhan(false)}}).catch(()=>{})}catch(e){}},1000);
-setTimeout(()=>{const p=document.getElementById("spl");if(p){p.classList.add("off");setTimeout(()=>p.remove(),700)}},1100);if(NATIVE_AD)setTimeout(()=>{try{ensureNotifPerm()}catch(e){}},2500);render();if(S.notif)showUb();setInterval(tick,1000);document.addEventListener("click",()=>{try{ac().resume()}catch(e){}});
+setTimeout(()=>{const p=document.getElementById("spl");if(p){p.classList.add("off");setTimeout(()=>p.remove(),700)}},1100);if(NATIVE_AD)setTimeout(()=>{try{ensureNotifPerm()}catch(e){}},2500);if(NATIVE_AD){setTimeout(()=>{try{updAuto()}catch(e){}},4500);document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(()=>{try{updAuto()}catch(e){}},1500)})}render();if(S.notif)showUb();setInterval(tick,1000);document.addEventListener("click",()=>{try{ac().resume()}catch(e){}});
 if(S.mode=="auto"&&navigator.geolocation){try{navigator.geolocation.getCurrentPosition(p=>{S.lat=p.coords.latitude;S.lng=p.coords.longitude;S.city="موقعي الحالي";save();TD="";render();locName(S.lat,S.lng).then(n=>{S.locName=n;save();TD="";render()})},()=>{},{timeout:8000})}catch(e){}}
 </script>
 </body>
