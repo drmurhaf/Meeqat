@@ -753,11 +753,14 @@ function openSheet(h){if(typeof qiblaStop=="function")qiblaStop();$("sheet").cla
 function closeSheet(){if(typeof qiblaStop=="function")qiblaStop();$("ov").classList.remove("on","full");$("sheet").classList.remove("full")}
 $("ov").addEventListener("click",e=>{if(e.target.id=="ov")closeSheet()});
 
+/* نهاية وقت كل صلاة اليوم: الفجر عند الشروق، والظهر عند العصر، والعصر عند المغرب، والمغرب عند العشاء، والعشاء عند منتصف الليل */
+function prayEndMs(i){const n=new Date();return +[T[0].sr,T[2].s,T[3].s,T[4].s,new Date(n.getFullYear(),n.getMonth(),n.getDate()+1,0,0,0)][i]}
 $("list").addEventListener("click",e=>{
   const sb=e.target.closest(".p.sr");
   if(sb){ensure();const n=new Date();if(T[0]&&T[1]&&n>=T[0].sr&&n<T[1].s){const k0=key(n);S.dh=S.dh||{};if(S.dh[k0])delete S.dh[k0];else S.dh[k0]=1;save();render()}return}
   const b=e.target.closest(".p");if(!b||b.dataset.i===undefined)return;const p=T[+b.dataset.i];if(new Date()<p.s)return;
   const k=key(new Date()),r=(S.log[k]||{})[p.k]||{o:null,s:0};
+  if(Date.now()>=prayEndMs(+b.dataset.i)&&r.o&&(r.o!="miss"||r.q)){bkToast(qT("انتهى وقت هذه الصلاة، ولا يمكن تعديل تسجيلها","This prayer's time has ended, so its record can't be changed"));return}
   const lock=(r.o=="miss"&&!r.q)||r.o=="qada";
   /* خيارات «على وقتها» متاحة في أول 60 دقيقة بعد دخول الوقت فقط */
   const fem=!!(S.prof&&S.prof.gender==="f"),LST=fem?OPTSF:OPTS;
