@@ -26,6 +26,33 @@ header h1{font-size:20px;margin:0}header small{color:var(--mut);display:block;fo
 .hero .l small{opacity:.85;font-size:13px}.hero .l b{display:block;font-size:26px;margin:2px 0}.hero .cd{font-size:20px;font-variant-numeric:tabular-nums;direction:ltr;text-align:right}
 .ring{position:relative;width:92px;height:92px;flex:none}.ring svg{transform:rotate(-90deg)}.ring div{position:absolute;inset:0;display:grid;place-content:center;text-align:center;line-height:1.1}
 .ring b{font-size:22px}.ring span{font-size:11px;opacity:.85}
+/* دائرة نقاط اليوم بعد اكتمال اليوم: قابلة للضغط وتختلف حسب النقاط */
+.tc0{--tc:255,255,255}.tc1{--tc:134,239,172}.tc2{--tc:52,211,153}.tc3{--tc:227,192,122}.tc4{--tc:255,214,102}.tc5{--tc:255,240,170}
+.ring .rb{display:none;position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);font-style:normal;font-size:16px;line-height:1;background:rgba(3,36,28,.94);border:1.5px solid rgb(var(--tc,255,255,255));border-radius:999px;padding:3px 7px;z-index:2}
+.ring.dn{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .15s;filter:drop-shadow(0 0 9px rgba(var(--tc),.55))}
+.ring.dn:active{transform:scale(.93)}
+.ring.dn #rg{stroke:rgb(var(--tc))}
+.ring.dn .rb{display:block}
+.ring.dn::before{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px dashed rgba(var(--tc),.8);animation:rpspin 16s linear infinite;pointer-events:none}
+.ring.dn.tc3,.ring.dn.tc4,.ring.dn.tc5{animation:rpglow 2.4s ease-in-out infinite}.ring.dn.tc5::after{content:"";position:absolute;inset:-12px;border-radius:50%;border:2px dotted rgba(var(--tc),.85);animation:rpspin 26s linear infinite reverse;pointer-events:none}
+@keyframes rpspin{to{transform:rotate(360deg)}}
+@keyframes rpglow{50%{filter:drop-shadow(0 0 17px rgba(var(--tc),.95))}}
+@media (prefers-reduced-motion:reduce){.ring.dn::before,.ring.dn.tc3,.ring.dn.tc4,.ring.dn.tc5,.ring.dn.tc5::after{animation:none}}
+/* نافذة تقرير اليوم */
+.rp{background:linear-gradient(160deg,#0b5d49,#03241c);color:#fff;border-radius:22px;padding:16px 14px 14px;border:1px solid rgba(227,192,122,.35);box-shadow:0 10px 28px -12px rgba(4,56,44,.6);position:relative;overflow:hidden;isolation:isolate}
+.rp::before{content:"";position:absolute;z-index:-1;inset:-40% -20% auto;height:80%;background:radial-gradient(closest-side,rgba(var(--tc),.28),transparent)}
+.rp-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:rgba(255,255,255,.78)}.rp-h b{color:var(--gold);font-size:16px}
+.rp-g{position:relative;width:128px;height:128px;margin:8px auto 0}.rp-g svg{transform:rotate(-90deg)}
+.rp-n{position:absolute;inset:0;display:grid;place-content:center;text-align:center;line-height:1.05}.rp-n b{font-size:38px;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}.rp-n span{font-size:12px;opacity:.8}
+.rp-e{position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-style:normal;font-size:20px;line-height:1;background:#03241c;border:2px solid rgb(var(--tc));border-radius:999px;padding:4px 8px}
+.rp-t{margin:12px 0 2px;text-align:center;font-size:21px;color:rgb(var(--tc))}
+.rp-m{margin:0 auto 4px;text-align:center;font-size:13px;line-height:1.6;color:rgba(255,255,255,.82);max-width:340px}
+.rp-c{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:8px 0 4px}.rp-c span{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px 10px;font-size:12.5px}
+.rp-r{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-inline-start:4px solid rgb(var(--cr,255,255,255));border-radius:14px;padding:8px 11px;margin-top:7px}
+.rp-i{font-size:21px;flex:none}.rp-nm{flex:1;min-width:0}.rp-nm b{display:block;font-size:14.5px;font-weight:700}.rp-nm small{display:block;color:rgba(255,255,255,.72);font-size:12px}
+.rp-p{flex:none;background:rgb(var(--cr,255,255,255));color:#fff;font-weight:700;border-radius:999px;padding:3px 10px;font-size:13px;direction:ltr;unicode-bidi:isolate}.rp-r.c-qada .rp-p{color:#1f2937}.rp-r.c-miss{--cr:251,146,60}.rp-r.c-none{--cr:143,174,163}.rp-r.c-none .rp-p{background:transparent;border:1px dashed rgba(255,255,255,.4);color:rgba(255,255,255,.7)}
+.rp-u{margin:8px 0 16px;text-align:center;font-size:15px;font-weight:700;color:#fff}
+.rp.tc5{border-color:rgba(255,240,170,.85);box-shadow:0 0 26px -4px rgba(255,214,102,.6)}
 .list{display:grid;gap:10px;margin:16px 0}
 .p{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;text-align:start;width:100%;color:var(--tx);font:inherit}
 .p.cur{border-color:var(--ac);box-shadow:0 0 0 2px var(--soft)}
@@ -722,6 +749,126 @@ function setGreet(){
 }
 addEventListener("resize",()=>{GK="";try{setGreet()}catch(e){}});
 try{document.fonts&&document.fonts.ready.then(()=>{GK="";try{setGreet()}catch(e){}})}catch(e){}
+/* ===== دائرة نقاط اليوم بعد اكتمال الصلوات + تقرير اليوم القابل للمشاركة ===== */
+const CRM={m10:"22,163,74",m5:"37,99,235",m3:"168,85,247",late:"249,115,22",qada:"234,179,8",miss:"251,146,60",none:"143,174,163"};
+function tierOf(s){
+  return s>52?{c:"tc5",rgb:"255,240,170",e:"🏆",a:"استثنائي",n:"Exceptional",m:"ما شاء الله تبارك الله! يوم نادر تتقدّم فيه بأعظم الطاعات والجماعة والنوافل. تقبّل الله منك، ونفع بك، ورفع قدرك في الدنيا والآخرة.",mn:"Mashaallah, Tabarakallah! A rare day of outstanding devotion — congregation, sunnah and more. May Allah accept it from you, benefit others through you, and raise your rank in this life and the next."}
+  :s>=45?{c:"tc4",rgb:"255,214,102",e:"👑",a:"مميز",n:"Distinguished",m:"ما شاء الله! يوم عامر بالجماعة والطاعات. بارك الله فيك وثبّتك.",mn:"Mashaallah! A day full of congregation and devotion. May Allah bless you and keep you steadfast."}
+  :s>=30?{c:"tc3",rgb:"227,192,122",e:"🌟",a:"يوم رائع",n:"Wonderful day",m:"يوم رائع، حافظت فيه على صلواتك. واصل على هذا النهج بإذن الله.",mn:"A wonderful day — you kept your prayers well. Keep it up, God willing."}
+  :s>=10?{c:"tc2",rgb:"52,211,153",e:"🌿",a:"يوم مقبول",n:"Acceptable day",m:"يوم مقبول وخطوة ثابتة. زد من الجماعة والسنن غداً بإذن الله.",mn:"An acceptable, steady day. Add more congregation and sunnah tomorrow, God willing."}
+  :s>=8?{c:"tc1",rgb:"134,239,172",e:"🌱",a:"بداية طيبة",n:"A good start",m:"بداية طيبة، وكل صلاة تُحسب لك. ابدأ غداً بهمّة أعلى.",mn:"A good start — every prayer counts. Aim a little higher tomorrow."}
+  :{c:"tc0",rgb:"255,255,255",e:"🤍",a:"غداً أفضل بإذن الله",n:"Tomorrow will be better",m:"لا بأس، غداً صفحة جديدة بإذن الله. اجعل الفجر أول خطوة.",mn:"No worries — tomorrow is a fresh page. Make Fajr your first step."};
+}
+/* التقرير لا يظهر إذا كانت هناك صلاة فائتة (لم تُقضَ) أو كانت النقاط أقل من 5 */
+const repOk=(l,sc)=>sc>=5&&!NAMES.some(n=>{const r=l[n[0]];return r&&r.o=="miss"&&!r.q});
+function ageOf(b){const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(b||"");if(!m)return null;const n=new Date();let a=n.getFullYear()-(+m[1]);if(n.getMonth()+1<+m[2]||(n.getMonth()+1==+m[2]&&n.getDate()<+m[3]))a--;return a>=0&&a<130?a:null}
+const ageTxt=a=>LANG_EN?a+" years old":(a==1?"سنة":a==2?"سنتان":a<=10?a+" سنوات":a+" سنة");
+/* تتحول دائرة النقاط عند انتهاء اليوم (دخل وقت العشاء وسُجّلت الصلوات الخمس) */
+function ringState(sc,now,log){
+  const ring=document.querySelector(".hero .ring");if(!ring)return;
+  const done=!!(T[4]&&now>=T[4].s&&NAMES.every(n=>log[n[0]])&&repOk(log,sc)),t=tierOf(sc);
+  const cls="ring"+(done?" dn "+t.c:"");if(ring.className!==cls)ring.className=cls;
+  let rb=ring.querySelector(".rb");if(!rb){rb=document.createElement("i");rb.className="rb";ring.appendChild(rb)}
+  const sp=ring.querySelector("span"),v=done?qT("تقرير اليوم","Day report"):qT("نقطة اليوم","Today's points");
+  if(sp&&sp.textContent!==v)sp.textContent=v;
+  if(rb.textContent!==t.e)rb.textContent=t.e;
+  if(done){ring.setAttribute("role","button");ring.tabIndex=0;ring.setAttribute("aria-label",v)}
+  else{ring.removeAttribute("role");ring.removeAttribute("tabindex");ring.removeAttribute("aria-label")}
+  if(!ring._rp){ring._rp=1;
+    ring.addEventListener("click",()=>{if(ring.classList.contains("dn"))dayRep()});
+    ring.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&ring.classList.contains("dn")){e.preventDefault();dayRep()}})}
+}
+function repData(){
+  ensure();const now=new Date(),k=key(now),l=S.log[k]||{},sc=score(k),t=tierOf(sc);
+  const rows=NAMES.map(n=>{const r=l[n[0]],ic=ICN[n[0]]||"🕌";
+    if(!r)return{n:n[1],ic,lbl:"لم تُسجَّل",p:"—",c:"none"};
+    const o=OPTS.find(x=>x[0]==r.o),v=ptsOf(r);
+    return{n:n[1],ic,lbl:OL(o,r)+(r.s?" + سنة":"")+(r.w?" + وتر":"")+(r.o=="miss"&&r.q?qT(" · تم قضاؤها"," · made up"):""),p:(v>0?"+":"")+v,c:(r.o=="miss"&&r.q)?"qada":r.o}});
+  let jam=0,sn=0,wt=0,ms=0;NAMES.forEach(n=>{const r=l[n[0]];if(!r)return;if(r.o=="m10"||r.o=="m5")jam++;if(r.s)sn++;if(r.w)wt++;if(r.o=="miss"&&!r.q)ms++});
+  const chips=[];
+  if(jam)chips.push("🕌 "+qT("جماعة","Congregation")+" ×"+jam);
+  if(sn)chips.push("✨ "+qT("سنن","Sunnah")+" ×"+sn);
+  if(wt)chips.push("🌙 "+qT("وتر","Witr"));
+  if(dhOn(k))chips.push("🌅 "+qT("ضحى","Duha"));
+  if(ms)chips.push("⚠️ "+qT("فائتة","Missed")+" ×"+ms);
+  const pf=S.prof||{},nm=String(pf.name||"").trim(),ag=ageOf(pf.birth),who=[nm,ag!=null?ageTxt(ag):""].filter(Boolean).join(" · ");
+  return{k,sc,t,rows,chips,who,pct:Math.max(0,Math.min(1,sc/55)),date:now.toLocaleDateString(LOCALE,{weekday:"long",day:"numeric",month:"long",year:"numeric"})};
+}
+function repText(d){
+  return "🕌 "+qT("ميقات — تقرير اليوم","Meeqat — Day report")+"\n"+d.date+(d.who?"\n"+d.who:"")+"\n"+d.t.e+" "+qT(d.t.a,d.t.n)+" · "+d.sc+" "+qT("نقطة","points")+"\n\n"+
+    d.rows.map(r=>r.ic+" "+trEN(r.n)+": "+trEN(r.lbl)+(r.p!="—"?" ("+r.p+")":"")).join("\n")+(d.chips.length?"\n\n"+d.chips.join(" · "):"");
+}
+function dayRep(){
+  const d=repData(),t=d.t,C=326.7;
+  openSheet(XB+'<div class="rp '+t.c+'"><div class="rp-h"><b>'+qT("ميقات","Meeqat")+'</b><span>'+d.date+'</span></div>'+(d.who?'<div class="rp-u">'+d.who.replace(/&/g,"&amp;").replace(/</g,"&lt;")+'</div>':"")+
+    '<div class="rp-g"><svg width="128" height="128" viewBox="0 0 128 128"><circle cx="64" cy="64" r="52" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="10"/><circle cx="64" cy="64" r="52" fill="none" stroke="rgb(var(--tc))" stroke-width="10" stroke-linecap="round" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C*(1-d.pct)).toFixed(1)+'"/></svg><div class="rp-n"><b>'+d.sc+'</b><span>'+qT("نقطة","points")+'</span></div><i class="rp-e">'+t.e+'</i></div>'+
+    '<h2 class="rp-t">'+qT(t.a,t.n)+'</h2><p class="rp-m">'+qT(t.m,t.mn)+'</p>'+
+    (d.chips.length?'<div class="rp-c">'+d.chips.map(c=>'<span>'+c+'</span>').join("")+'</div>':"")+
+    d.rows.map(r=>'<div class="rp-r c-'+r.c+'" style="--cr:'+CRM[r.c]+'"><span class="rp-i">'+r.ic+'</span><div class="rp-nm"><b>'+r.n+'</b><small>'+r.lbl+'</small></div><span class="rp-p">'+r.p+'</span></div>').join("")+
+    '</div><button class="btn" id="rps" style="margin-top:12px">📤 '+qT("مشاركة التقرير","Share report")+'</button>');
+  $("sheet").onclick=ev=>{if(ev.target.closest("#xc")){closeSheet();return}if(ev.target.closest("#rps"))repShare(d)};
+}
+async function repPng(d){
+  try{await document.fonts.load("700 40px Tajawal");await document.fonts.load("400 30px Tajawal")}catch(e){}
+  const W=1080,H=1750,cv=document.createElement("canvas");cv.width=W;cv.height=H;const x=cv.getContext("2d"),rtl=!LANG_EN,FF="Tajawal,system-ui,sans-serif",M=70;
+  x.direction=rtl?"rtl":"ltr";
+  const rr=(a,b,w,h,r)=>{x.beginPath();x.moveTo(a+r,b);x.arcTo(a+w,b,a+w,b+h,r);x.arcTo(a+w,b+h,a,b+h,r);x.arcTo(a,b+h,a,b,r);x.arcTo(a,b,a+w,b,r);x.closePath()};
+  const fit=(s,px,wt,max)=>{let f=px;do{x.font=wt+" "+f+"px "+FF;f-=2}while(x.measureText(s).width>max&&f>18)};
+  const g=x.createLinearGradient(0,0,W,H);g.addColorStop(0,"#0b5d49");g.addColorStop(1,"#03241c");x.fillStyle=g;x.fillRect(0,0,W,H);
+  const gl=x.createRadialGradient(W/2,470,20,W/2,470,560);gl.addColorStop(0,"rgba("+d.t.rgb+",.30)");gl.addColorStop(1,"rgba("+d.t.rgb+",0)");x.fillStyle=gl;x.fillRect(0,0,W,H);
+  x.strokeStyle="rgba(227,192,122,.45)";x.lineWidth=4;rr(24,24,W-48,H-48,44);x.stroke();
+  if(d.t.c=="tc5"){x.strokeStyle="rgba(255,240,170,.9)";x.lineWidth=6;rr(24,24,W-48,H-48,44);x.stroke()}
+  x.textBaseline="middle";x.textAlign="center";
+  x.fillStyle="#e3c07a";x.font="700 56px "+FF;x.fillText(qT("ميقات","Meeqat"),W/2,110);
+  x.fillStyle="rgba(255,255,255,.78)";x.font="400 32px "+FF;x.fillText(d.date,W/2,172);
+  if(d.who){x.fillStyle="#fff";fit(d.who,42,"700",W-200);x.fillText(d.who,W/2,232)}
+  const cx=W/2,cy=480,R=150;
+  if(d.t.c=="tc5"){x.save();x.strokeStyle="rgba("+d.t.rgb+",.7)";x.lineWidth=4;x.setLineDash([2,16]);x.lineCap="round";x.beginPath();x.arc(cx,cy,R+40,0,Math.PI*2);x.stroke();x.restore();
+    x.fillStyle="rgba("+d.t.rgb+",.9)";[[150,330,22],[930,300,18],[110,640,14],[970,620,20],[78,770,12],[1004,780,14]].forEach(p=>{x.beginPath();x.moveTo(p[0],p[1]-p[2]);x.quadraticCurveTo(p[0],p[1],p[0]+p[2],p[1]);x.quadraticCurveTo(p[0],p[1],p[0],p[1]+p[2]);x.quadraticCurveTo(p[0],p[1],p[0]-p[2],p[1]);x.quadraticCurveTo(p[0],p[1],p[0],p[1]-p[2]);x.fill()})}
+  x.lineWidth=30;x.lineCap="round";x.strokeStyle="rgba(255,255,255,.16)";x.beginPath();x.arc(cx,cy,R,0,Math.PI*2);x.stroke();
+  if(d.pct>0){x.strokeStyle="rgb("+d.t.rgb+")";x.beginPath();x.arc(cx,cy,R,-Math.PI/2,-Math.PI/2+Math.PI*2*d.pct);x.stroke()}
+  x.fillStyle="#fff";x.font="700 130px "+FF;x.direction="ltr";x.fillText(String(d.sc),cx,cy-6);x.direction=rtl?"rtl":"ltr";
+  x.fillStyle="rgba(255,255,255,.75)";x.font="400 34px "+FF;x.fillText(qT("نقطة","points"),cx,cy+78);
+  x.fillStyle="#03241c";x.strokeStyle="rgb("+d.t.rgb+")";x.lineWidth=5;x.beginPath();x.arc(cx,cy-R,46,0,Math.PI*2);x.fill();x.stroke();
+  x.font="64px "+FF;x.fillText(d.t.e,cx,cy-R+4);
+  x.fillStyle="rgb("+d.t.rgb+")";x.font="700 68px "+FF;x.fillText(qT(d.t.a,d.t.n),W/2,744);
+  x.fillStyle="rgba(255,255,255,.84)";x.font="400 34px "+FF;
+  const words=qT(d.t.m,d.t.mn).split(" "),lines=[];let cur="";
+  words.forEach(w=>{const tr=cur?cur+" "+w:w;if(x.measureText(tr).width>W-220&&cur){lines.push(cur);cur=w}else cur=tr});if(cur)lines.push(cur);
+  lines.slice(0,3).forEach((ln,i)=>x.fillText(ln,W/2,815+i*52));
+  if(d.chips.length){x.fillStyle="#fff";fit(d.chips.join("   ·   "),32,"400",W-160);x.fillText(d.chips.join("   ·   "),W/2,995)}
+  const ST=rtl?W-M:M,EN2=rtl?M:W-M,sg=rtl?-1:1;
+  d.rows.forEach((r,i)=>{
+    const y=1050+i*124,cr="rgb("+CRM[r.c]+")";
+    x.fillStyle="rgba(255,255,255,.09)";rr(M,y,W-2*M,104,26);x.fill();
+    x.strokeStyle="rgba(255,255,255,.13)";x.lineWidth=2;x.stroke();
+    x.fillStyle=cr;rr(rtl?W-M-12:M,y+16,12,72,6);x.fill();
+    x.textAlign="center";x.fillStyle="#fff";x.font="48px "+FF;x.fillText(r.ic,ST+sg*58,y+54);
+    x.textAlign="start";x.fillStyle="#fff";x.font="700 38px "+FF;x.fillText(trEN(r.n),ST+sg*112,y+34);
+    x.fillStyle="rgba(255,255,255,.72)";fit(trEN(r.lbl),27,"400",W-2*M-112-190);x.fillText(trEN(r.lbl),ST+sg*112,y+72);
+    const px=EN2-sg*92;
+    if(r.c=="none"){x.strokeStyle="rgba(255,255,255,.4)";x.lineWidth=2;x.setLineDash([8,6]);rr(px-72,y+26,144,52,26);x.stroke();x.setLineDash([])}
+    else{x.fillStyle=cr;rr(px-72,y+26,144,52,26);x.fill()}
+    x.textAlign="center";x.fillStyle=r.c=="qada"?"#1f2937":"#fff";x.direction="ltr";x.font="700 32px "+FF;x.fillText(r.p,px,y+53);x.direction=rtl?"rtl":"ltr";
+  });
+  x.textAlign="center";x.fillStyle="rgba(255,255,255,.55)";x.font="400 28px "+FF;x.fillText(qT("تقرير أُنشئ بواسطة تطبيق ميقات","Report created with Meeqat"),W/2,1690);
+  return new Promise(res=>cv.toBlob(b=>res(b),"image/png"));
+}
+async function repShare(d){
+  const txt=repText(d),ttl=qT("ميقات — تقرير اليوم","Meeqat — Day report");let blob=null;
+  try{blob=await repPng(d)}catch(e){}
+  try{
+    if(blob&&navigator.canShare&&typeof File=="function"){
+      const f=new File([blob],"meeqat-"+d.k+".png",{type:"image/png"});
+      if(navigator.canShare({files:[f]})){await navigator.share({files:[f]});return}
+    }
+    if(navigator.share){await navigator.share({title:ttl,text:txt});return}
+  }catch(e){if(e&&e.name==="AbortError")return}
+  try{await navigator.clipboard.writeText(txt);bkToast(qT("✓ تم نسخ التقرير، الصقه حيث تشاء","✓ Report copied — paste it anywhere"));return}catch(e){}
+  try{const ta=document.createElement("textarea");ta.value=txt;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.select();const ok=document.execCommand("copy");ta.remove();if(ok){bkToast(qT("✓ تم نسخ التقرير، الصقه حيث تشاء","✓ Report copied — paste it anywhere"));return}}catch(e){}
+  if(blob){try{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="meeqat-"+d.k+".png";document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);bkToast(qT("✓ تم حفظ صورة التقرير","✓ Report image saved"));return}catch(e){}}
+  bkToast(qT("تعذّرت المشاركة","Could not share"));
+}
 function render(){
   ensure();try{setGreet()}catch(e){}autoMiss();nativeSchedule();nativeDone();nativeOpts();nativeWidget();const now=new Date(),k=key(now),log=S.log[k]||{};
   $("sub").textContent=now.toLocaleDateString(CALLOC(),{weekday:"long",day:"numeric",month:"long"})+" · "+(S.city=="موقعي الحالي"&&S.locName?S.locName:S.city);
@@ -730,7 +877,7 @@ function render(){
     const open=now>=p.s,r=log[p.k];let cc="",badge='<span class="pt none">—</span>',sub=open?(i==cur?"الوقت الآن · اضغط للتسجيل":"اضغط للتسجيل"):"لم يحن الوقت بعد";
     if(r){const v=ptsOf(r),o=OPTS.find(x=>x[0]==r.o);badge='<span class="pt '+(v<0?"neg":"")+'">'+(v>0?"+":"")+v+'</span>';sub=OL(o,r)+(r.s?" + سنة":"")+(r.w?" + وتر":"")+qnote(r)+(r.o=="miss"&&!r.q?" · اضغط لقضائها (+1)":"");cc=" k c-"+(r.o=="miss"&&r.q?"qada":r.o)}
     return '<button class="p '+(i==cur?"cur":"")+(open?"":" lock")+cc+'" data-i="'+i+'"><span class="ic">'+(ICN[p.k]||"🕌")+'</span><div class="n"><b>'+p.n+'</b><small>'+sub+'</small></div><span class="t">'+fmt(p.s)+'</span>'+badge+'</button>'+(i==0?(()=>{const so=now>=p.sr,dd=dhOn(k),ex=T[1]&&now>=T[1].s,lk=!so||ex;return '<button class="p sr'+(lk?" lock":"")+(dd?" k c-m10":"")+'" data-d="1"><span class="ic">🌅</span><div class="n"><b>الشروق</b><small>'+(dd?"تم أداء صلاة الضحى":!so?"لم يحن الوقت بعد":ex?"فات وقت صلاة الضحى":"اضغط لتسجيل صلاة الضحى (+2)")+'</small></div><span class="t">'+fmt(p.sr)+'</span>'+(dd?'<span class="pt">+2</span>':'<span class="pt none">—</span>')+'</button>'})():"")}).join("");
-  const sc=score(k);$("sc").textContent=sc;$("rg").style.strokeDashoffset=238.8*(1-Math.max(0,Math.min(1,sc/55)));
+  const sc=score(k);$("sc").textContent=sc;$("rg").style.strokeDashoffset=238.8*(1-Math.max(0,Math.min(1,sc/55)));try{ringState(sc,now,log)}catch(e){}
   const nx=T.findIndex(p=>p.s>now);
   const np=nx>=0?T[nx]:TN[0];
   $("nn").textContent=np.n;$("nl").textContent="الصلاة القادمة · "+fmt(np.s);HN=np.k;setScene(sceneFor(np,now));
