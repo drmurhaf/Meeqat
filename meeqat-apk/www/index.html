@@ -747,6 +747,8 @@ async function bkCopy(text){
   try{const ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;top:0;left:0;opacity:0";document.body.appendChild(ta);ta.focus();ta.select();const ok=document.execCommand("copy");ta.remove();return ok}catch(e){return false}
 }
 function bkAnchor(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000)}
+const bkNat=()=>{try{return !!(NATIVE_AD&&typeof NATIVE_AD.readBackup==="function")}catch(e){return false}};
+const BK_DIR="Miqat";
 async function bkExport(){
   let text,blob,file,name;
   try{
@@ -757,8 +759,8 @@ async function bkExport(){
     blob=new Blob([text],{type:"application/json"});file=new File([blob],name,{type:"application/json"});
   }catch(e){bkToast("تعذّر تجهيز النسخة الاحتياطية");return}
   let how="";
-  /* 1) إضافة الملفات في كاباسيتور إن وُجدت */
-  try{const C=window.Capacitor,FS=C&&C.Plugins&&C.Plugins.Filesystem;if(FS){await FS.writeFile({path:name,data:text,directory:"DOCUMENTS",encoding:"utf8"});how="✓ حُفظ الملف في مجلد المستندات (Documents) باسم "+name}}catch(e){}
+  /* 1) حفظ أصلي في التنزيلات (بدون خطوات إضافية) */
+  try{if(NATIVE_AD&&typeof NATIVE_AD.saveBackup==="function"){await NATIVE_AD.saveBackup({name:name,data:text});how="✓ حُفظ الملف في: التنزيلات ‹Download› ← "+BK_DIR+" ← "+name}}catch(e){if(String(e&&(e.message||e)).includes("permission"))how="🔐 اسمح للتطبيق بالوصول إلى الملفات في النافذة التي ظهرت، ثم اضغط «حفظ» مرة أخرى."}
   /* 2) قائمة المشاركة */
   if(!how&&navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:name});how="✓ تمت مشاركة الملف "+name}catch(e){}}
   /* 3) نافذة اختيار مكان الحفظ (متصفحات سطح المكتب) */
@@ -793,10 +795,15 @@ async function bkImportText(text){
 }
 const bkImport=async f=>{try{await bkImportText(await f.text())}catch(e){bkToast("تعذّر قراءة الملف")}};
 function bkImpDlg(){
-  bkDlg('<h3 style="margin:0 0 8px">📥 استيراد البيانات</h3><div class="s" style="margin-bottom:10px">اختر ملف النسخة الاحتياطية، أو الصق النص الذي نسخته سابقاً.</div><button class="btn" id="bkm_file" style="margin-top:0">📁 اختيار ملف</button><button class="btn g" id="bkm_paste">📋 لصق من الحافظة</button><div id="bkm_area"></div><button class="btn g" id="bkm_x">إلغاء</button>').onclick=async e=>{
+  bkDlg('<h3 style="margin:0 0 8px">📥 استيراد البيانات</h3><div class="s" style="margin-bottom:10px">اختر ملف النسخة الاحتياطية، أو الصق النص الذي نسخته سابقاً.</div>'+(bkNat()?'<button class="btn" id="bkm_last" style="margin-top:0">♻️ استعادة آخر نسخة محفوظة</button><button class="btn g" id="bkm_file">📁 اختيار ملف</button>':'<button class="btn" id="bkm_file" style="margin-top:0">📁 اختيار ملف</button>')+'<button class="btn g" id="bkm_paste">📋 لصق من الحافظة</button><div id="bkm_area"></div><button class="btn g" id="bkm_x">إلغاء</button>').onclick=async e=>{
     const id=e.target.id;
     if(id==="bkm")return bkClose();
     if(id==="bkm_x")bkClose();
+    if(id==="bkm_last"){
+      try{const r=await NATIVE_AD.readBackup();return bkImportText(r.data)}
+      catch(err){bkToast(String(err&&(err.message||err)).includes("permission")?"اسمح للتطبيق بالوصول إلى الملفات ثم أعد المحاولة":"لا توجد نسخة محفوظة في مجلد التنزيلات")}
+      return;
+    }
     if(id==="bkm_file"){bkClose();const f=document.getElementById("bk_file");if(f)f.click()}
     if(id==="bkm_paste"){
       let t="";try{t=await navigator.clipboard.readText()}catch(err){}
