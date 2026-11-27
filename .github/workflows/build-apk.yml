@@ -313,6 +313,7 @@ jobs:
                   try {
                       AdhanScheduler.scheduleAll(context);
                       PrayerWidget.refreshAll(context);
+                      TodayWidget.refreshAll(context);
                   } catch (Exception e) { }
               }
           }
@@ -674,6 +675,7 @@ jobs:
                       JSObject d = call.getObject("data");
                       PrayerWidget.saveData(getContext(), d == null ? "{}" : d.toString());
                       PrayerWidget.refreshAll(getContext());
+                      TodayWidget.refreshAll(getContext());
                   } catch (Exception e) { }
                   call.resolve();
               }
@@ -856,6 +858,7 @@ jobs:
                   super.onReceive(context, intent);
                   if (intent != null && TICK.equals(intent.getAction())) {
                       refreshAll(context);
+                      TodayWidget.refreshAll(context);
                   }
               }
 
@@ -936,10 +939,16 @@ jobs:
                       int imm = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
                       PendingIntent pi = PendingIntent.getBroadcast(c, 78, in, PendingIntent.FLAG_UPDATE_CURRENT | imm);
                       if (t <= 0) {
-                          am.cancel(pi);
-                          return;
+                          t = System.currentTimeMillis() + 24L * 3600L * 1000L;
                       }
                       long at = t + 1500L;
+                      java.util.Calendar mid = java.util.Calendar.getInstance();
+                      mid.add(java.util.Calendar.DAY_OF_YEAR, 1);
+                      mid.set(java.util.Calendar.HOUR_OF_DAY, 0);
+                      mid.set(java.util.Calendar.MINUTE, 0);
+                      mid.set(java.util.Calendar.SECOND, 5);
+                      mid.set(java.util.Calendar.MILLISECOND, 0);
+                      if (mid.getTimeInMillis() < at) at = mid.getTimeInMillis();
                       if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) {
                           am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
                       } else {
@@ -949,6 +958,120 @@ jobs:
               }
           }
           JAVA_7
+          cat > $D/TodayWidget.java <<'JAVA_8'
+          package com.murhaf.meeqat;
+
+          import android.app.PendingIntent;
+          import android.appwidget.AppWidgetManager;
+          import android.appwidget.AppWidgetProvider;
+          import android.content.ComponentName;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.graphics.Color;
+          import android.os.Build;
+          import android.widget.RemoteViews;
+          import java.text.SimpleDateFormat;
+          import java.util.Date;
+          import java.util.Locale;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          public class TodayWidget extends AppWidgetProvider {
+
+              @Override
+              public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
+                  refresh(context, manager, ids);
+              }
+
+              static void refreshAll(Context c) {
+                  try {
+                      AppWidgetManager m = AppWidgetManager.getInstance(c);
+                      int[] ids = m.getAppWidgetIds(new ComponentName(c, TodayWidget.class));
+                      if (ids != null && ids.length > 0) refresh(c, m, ids);
+                  } catch (Exception e) { }
+              }
+
+              static void refresh(Context c, AppWidgetManager m, int[] ids) {
+                  RemoteViews rv = new RemoteViews(c.getPackageName(), R.layout.widget_today);
+                  int[] rIds = {R.id.d_r0, R.id.d_r1, R.id.d_r2, R.id.d_r3, R.id.d_r4, R.id.d_r5};
+                  int[] nIds = {R.id.d_n0, R.id.d_n1, R.id.d_n2, R.id.d_n3, R.id.d_n4, R.id.d_n5};
+                  int[] tIds = {R.id.d_t0, R.id.d_t1, R.id.d_t2, R.id.d_t3, R.id.d_t4, R.id.d_t5};
+                  long now = System.currentTimeMillis();
+                  long nextT = 0;
+                  try {
+                      JSONObject root = new JSONObject(c.getSharedPreferences(PrayerWidget.PREF, Context.MODE_PRIVATE).getString("data", "{}"));
+                      JSONArray items = root.optJSONArray("items");
+                      JSONArray days = root.optJSONArray("days");
+                      String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(now));
+                      rv.setTextViewText(R.id.d_title, root.optString("today", "مواقيت اليوم"));
+
+                      // the next prayer overall (may belong to tomorrow)
+                      if (items != null) {
+                          for (int i = 0; i < items.length(); i++) {
+                              long t = items.getJSONObject(i).getLong("t");
+                              if (t > now) {
+                                  nextT = t;
+                                  break;
+                              }
+                          }
+                      }
+                      String[] names = new String[6];
+                      String[] times = new String[6];
+                      long[] ts = new long[6];
+                      boolean[] isPrayer = new boolean[6];
+                      int[] slot = {0, 2, 3, 4, 5};
+                      int k = 0;
+                      if (items != null) {
+                          for (int i = 0; i < items.length() && k < 5; i++) {
+                              JSONObject it = items.getJSONObject(i);
+                              if (!today.equals(it.optString("d"))) continue;
+                              int s = slot[k];
+                              names[s] = it.optString("n");
+                              times[s] = it.optString("tm");
+                              ts[s] = it.getLong("t");
+                              isPrayer[s] = true;
+                              k++;
+                          }
+                      }
+                      if (days != null) {
+                          for (int i = 0; i < days.length(); i++) {
+                              JSONObject dy = days.getJSONObject(i);
+                              if (today.equals(dy.optString("d"))) {
+                                  names[1] = root.optString("sun", "الشروق");
+                                  times[1] = dy.optString("sr");
+                                  ts[1] = dy.optLong("t", 0L);
+                                  rv.setTextViewText(R.id.d_date, dy.optString("lbl"));
+                              }
+                          }
+                      }
+                      for (int r = 0; r < 6; r++) {
+                          rv.setTextViewText(nIds[r], names[r] == null ? "" : names[r]);
+                          rv.setTextViewText(tIds[r], times[r] == null ? "" : times[r]);
+                          int color = Color.WHITE;
+                          int bg = 0;
+                          if (names[r] != null && ts[r] > 0 && ts[r] <= now) {
+                              color = Color.parseColor("#80FFFFFF");
+                          }
+                          if (isPrayer[r] && ts[r] == nextT) {
+                              color = Color.parseColor("#E3C07A");
+                              bg = R.drawable.widget_row_hl;
+                          }
+                          rv.setTextColor(nIds[r], color);
+                          rv.setTextColor(tIds[r], color);
+                          rv.setInt(rIds[r], "setBackgroundResource", bg);
+                      }
+                  } catch (Exception e) { }
+
+                  Intent open = new Intent(c, MainActivity.class);
+                  open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  int imm = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
+                  PendingIntent pi = PendingIntent.getActivity(c, 79, open, PendingIntent.FLAG_UPDATE_CURRENT | imm);
+                  rv.setOnClickPendingIntent(R.id.d_root, pi);
+                  m.updateAppWidget(ids, rv);
+                  PrayerWidget.scheduleNext(c, nextT);
+              }
+          }
+          JAVA_8
       - name: Android manifest (permissions, receivers, service)
         run: |
           python3 - <<'PY'
@@ -972,6 +1095,12 @@ jobs:
                           <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                       </intent-filter>
                       <meta-data android:name="android.appwidget.provider" android:resource="@xml/prayer_widget_info" />
+                  </receiver>
+                  <receiver android:name=".TodayWidget" android:exported="true" android:label="ميقات · مواقيت اليوم">
+                      <intent-filter>
+                          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                      </intent-filter>
+                      <meta-data android:name="android.appwidget.provider" android:resource="@xml/today_widget_info" />
                   </receiver>
                   <service android:name=".AdhanService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
           """
@@ -1228,8 +1357,258 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="meeqat_widget_desc">الصلاة القادمة والوقت المتبقي</string>
+              <string name="meeqat_widget_today_desc">أوقات الصلاة لليوم الحالي</string>
           </resources>
           XML_3
+          cat > $R/layout/widget_today.xml <<'XML_4'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/d_root"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="@drawable/widget_bg"
+              android:layoutDirection="rtl"
+              android:orientation="vertical"
+              android:padding="12dp">
+
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:gravity="center_vertical"
+                  android:orientation="horizontal"
+                  android:paddingBottom="4dp"
+                  android:paddingEnd="10dp"
+                  android:paddingStart="10dp">
+
+                  <TextView
+                      android:id="@+id/d_title"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:text="مواقيت اليوم"
+                      android:textColor="#E3C07A"
+                      android:textSize="13sp"
+                      android:textStyle="bold" />
+
+                  <TextView
+                      android:id="@+id/d_date"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:maxLines="1"
+                      android:text="الجمعة، 27 نوفمبر"
+                      android:textColor="#CCFFFFFF"
+                      android:textSize="12sp" />
+              </LinearLayout>
+
+              <LinearLayout
+                  android:id="@+id/d_r0"
+                  android:layout_width="match_parent"
+                  android:layout_height="0dp"
+                  android:layout_weight="1"
+                  android:gravity="center_vertical"
+                  android:orientation="horizontal"
+                  android:paddingEnd="10dp"
+                  android:paddingStart="10dp">
+
+                  <TextView
+                      android:id="@+id/d_n0"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:maxLines="1"
+                      android:text="الفجر"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp" />
+
+                  <TextView
+                      android:id="@+id/d_t0"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:maxLines="1"
+                      android:text="05:09 ص"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp"
+                      android:textStyle="bold" />
+              </LinearLayout>
+
+              <LinearLayout
+                  android:id="@+id/d_r1"
+                  android:layout_width="match_parent"
+                  android:layout_height="0dp"
+                  android:layout_weight="1"
+                  android:gravity="center_vertical"
+                  android:orientation="horizontal"
+                  android:paddingEnd="10dp"
+                  android:paddingStart="10dp">
+
+                  <TextView
+                      android:id="@+id/d_n1"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:maxLines="1"
+                      android:text="الشروق"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp" />
+
+                  <TextView
+                      android:id="@+id/d_t1"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:maxLines="1"
+                      android:text="06:29 ص"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp"
+                      android:textStyle="bold" />
+              </LinearLayout>
+
+              <LinearLayout
+                  android:id="@+id/d_r2"
+                  android:layout_width="match_parent"
+                  android:layout_height="0dp"
+                  android:layout_weight="1"
+                  android:gravity="center_vertical"
+                  android:orientation="horizontal"
+                  android:paddingEnd="10dp"
+                  android:paddingStart="10dp">
+
+                  <TextView
+                      android:id="@+id/d_n2"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:maxLines="1"
+                      android:text="الظهر"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp" />
+
+                  <TextView
+                      android:id="@+id/d_t2"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:maxLines="1"
+                      android:text="11:59 ص"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp"
+                      android:textStyle="bold" />
+              </LinearLayout>
+
+              <LinearLayout
+                  android:id="@+id/d_r3"
+                  android:layout_width="match_parent"
+                  android:layout_height="0dp"
+                  android:layout_weight="1"
+                  android:gravity="center_vertical"
+                  android:orientation="horizontal"
+                  android:paddingEnd="10dp"
+                  android:paddingStart="10dp">
+
+                  <TextView
+                      android:id="@+id/d_n3"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:maxLines="1"
+                      android:text="العصر"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp" />
+
+                  <TextView
+                      android:id="@+id/d_t3"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:maxLines="1"
+                      android:text="03:04 م"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp"
+                      android:textStyle="bold" />
+              </LinearLayout>
+
+              <LinearLayout
+                  android:id="@+id/d_r4"
+                  android:layout_width="match_parent"
+                  android:layout_height="0dp"
+                  android:layout_weight="1"
+                  android:gravity="center_vertical"
+                  android:orientation="horizontal"
+                  android:paddingEnd="10dp"
+                  android:paddingStart="10dp">
+
+                  <TextView
+                      android:id="@+id/d_n4"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:maxLines="1"
+                      android:text="المغرب"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp" />
+
+                  <TextView
+                      android:id="@+id/d_t4"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:maxLines="1"
+                      android:text="05:25 م"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp"
+                      android:textStyle="bold" />
+              </LinearLayout>
+
+              <LinearLayout
+                  android:id="@+id/d_r5"
+                  android:layout_width="match_parent"
+                  android:layout_height="0dp"
+                  android:layout_weight="1"
+                  android:gravity="center_vertical"
+                  android:orientation="horizontal"
+                  android:paddingEnd="10dp"
+                  android:paddingStart="10dp">
+
+                  <TextView
+                      android:id="@+id/d_n5"
+                      android:layout_width="0dp"
+                      android:layout_height="wrap_content"
+                      android:layout_weight="1"
+                      android:maxLines="1"
+                      android:text="العشاء"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp" />
+
+                  <TextView
+                      android:id="@+id/d_t5"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:maxLines="1"
+                      android:text="06:40 م"
+                      android:textColor="#FFFFFF"
+                      android:textSize="15sp"
+                      android:textStyle="bold" />
+              </LinearLayout>
+          </LinearLayout>
+          XML_4
+          cat > $R/drawable/widget_row_hl.xml <<'XML_5'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="#33E3C07A" />
+              <corners android:radius="12dp" />
+          </shape>
+          XML_5
+          cat > $R/xml/today_widget_info.xml <<'XML_6'
+          <?xml version="1.0" encoding="utf-8"?>
+          <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+              android:description="@string/meeqat_widget_today_desc"
+              android:initialLayout="@layout/widget_today"
+              android:minHeight="200dp"
+              android:minWidth="180dp"
+              android:previewLayout="@layout/widget_today"
+              android:resizeMode="horizontal|vertical"
+              android:targetCellHeight="3"
+              android:targetCellWidth="3"
+              android:updatePeriodMillis="1800000"
+              android:widgetCategory="home_screen" />
+          XML_6
       - name: Fixed signing and version
         run: |
           python3 - <<'PY'
