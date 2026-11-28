@@ -626,15 +626,18 @@ jobs:
           import android.app.NotificationManager;
           import android.content.Context;
           import android.content.Intent;
+          import android.content.ClipData;
           import android.content.pm.PackageInfo;
           import android.content.SharedPreferences;
           import android.net.Uri;
           import android.os.Build;
           import android.os.PowerManager;
           import android.provider.Settings;
+          import android.util.Base64;
           import androidx.activity.result.ActivityResult;
           import androidx.core.app.ActivityCompat;
           import androidx.core.app.NotificationManagerCompat;
+          import androidx.core.content.FileProvider;
           import com.getcapacitor.JSArray;
           import com.getcapacitor.JSObject;
           import com.getcapacitor.Plugin;
@@ -643,6 +646,8 @@ jobs:
           import com.getcapacitor.annotation.ActivityCallback;
           import com.getcapacitor.annotation.CapacitorPlugin;
           import java.io.ByteArrayOutputStream;
+          import java.io.File;
+          import java.io.FileOutputStream;
           import java.io.InputStream;
           import java.io.OutputStream;
           import java.nio.charset.StandardCharsets;
@@ -791,6 +796,43 @@ jobs:
                       is.close();
                       r.put("data", new String(bos.toByteArray(), StandardCharsets.UTF_8));
                       call.resolve(r);
+                  } catch (Exception e) {
+                      call.reject(String.valueOf(e.getMessage()));
+                  }
+              }
+
+              /* share a PNG image (base64) through the system share sheet, image only, no text */
+              @PluginMethod
+              public void shareImage(PluginCall call) {
+                  try {
+                      String b64 = call.getString("data", "");
+                      String name = call.getString("name", "meeqat-report.png");
+                      if (b64 == null || b64.isEmpty()) {
+                          call.reject("empty");
+                          return;
+                      }
+                      int comma = b64.indexOf(',');
+                      if (b64.startsWith("data:") && comma >= 0) b64 = b64.substring(comma + 1);
+                      byte[] bytes = Base64.decode(b64, Base64.DEFAULT);
+                      File dir = new File(getContext().getCacheDir(), "shared");
+                      if (!dir.exists()) dir.mkdirs();
+                      String safe = (name == null ? "meeqat-report.png" : name).replaceAll("[^A-Za-z0-9._-]", "_");
+                      if (!safe.endsWith(".png")) safe = safe + ".png";
+                      File f = new File(dir, safe);
+                      FileOutputStream fo = new FileOutputStream(f);
+                      fo.write(bytes);
+                      fo.flush();
+                      fo.close();
+                      Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".meeqatshare", f);
+                      Intent send = new Intent(Intent.ACTION_SEND);
+                      send.setType("image/png");
+                      send.putExtra(Intent.EXTRA_STREAM, uri);
+                      send.setClipData(ClipData.newRawUri("", uri));
+                      send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                      Intent chooser = Intent.createChooser(send, "");
+                      chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                      getActivity().startActivity(chooser);
+                      call.resolve();
                   } catch (Exception e) {
                       call.reject(String.valueOf(e.getMessage()));
                   }
@@ -1188,6 +1230,14 @@ jobs:
               }
           }
           JAVA_8
+          cat > $D/MeeqatFileProvider.java <<'JAVA_9'
+          package com.murhaf.meeqat;
+
+          import androidx.core.content.FileProvider;
+
+          public class MeeqatFileProvider extends FileProvider {
+          }
+          JAVA_9
       - name: Android manifest (permissions, receivers, service)
         run: |
           python3 - <<'PY'
@@ -1219,6 +1269,9 @@ jobs:
                       <meta-data android:name="android.appwidget.provider" android:resource="@xml/today_widget_info" />
                   </receiver>
                   <service android:name=".AdhanService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
+                  <provider android:name=".MeeqatFileProvider" android:authorities="${applicationId}.meeqatshare" android:exported="false" android:grantUriPermissions="true">
+                      <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/meeqat_share_paths" />
+                  </provider>
           """
           assert '<application' in s and '</application>' in s
           s=s.replace('<application',add+'    <application',1)
@@ -1725,6 +1778,12 @@ jobs:
               android:updatePeriodMillis="1800000"
               android:widgetCategory="home_screen" />
           XML_6
+          cat > $R/xml/meeqat_share_paths.xml <<'XML_7'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+              <cache-path name="meeqat_share" path="shared/" />
+          </paths>
+          XML_7
       - name: Fixed signing and version
         run: |
           python3 - <<'PY'
