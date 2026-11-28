@@ -1784,7 +1784,7 @@ jobs:
               <cache-path name="meeqat_share" path="shared/" />
           </paths>
           XML_7
-            - name: Restore signing key
+      - name: Restore signing key
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
         run: echo "$KEYSTORE_B64" | base64 -d > meeqat.jks
@@ -1807,13 +1807,17 @@ jobs:
           s=re.sub(r'versionCode\s+\d+','versionCode ${{ github.run_number }}',s,count=1)
           open(p,'w').write(s)
           PY
-            - name: Build debug APK
+      - name: Build debug APK
         working-directory: meeqat-apk/android
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meeqat-apk
+          path: meeqat-apk/android/app/build/outputs/apk/debug/app-debug.apk
       - name: Publish GitHub Release (manual run, or [release] in the commit message)
         if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
         env:
