@@ -1784,6 +1784,10 @@ jobs:
               <cache-path name="meeqat_share" path="shared/" />
           </paths>
           XML_7
+            - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: echo "$KEYSTORE_B64" | base64 -d > meeqat.jks
       - name: Fixed signing and version
         run: |
           python3 - <<'PY'
@@ -1794,22 +1798,22 @@ jobs:
               signingConfigs {
                   debug {
                       storeFile file("../../meeqat.jks")
-                      storePassword "meeqat123"
-                      keyAlias "meeqat"
-                      keyPassword "meeqat123"
+                      storePassword System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("KEY_ALIAS")
+                      keyPassword System.getenv("KEY_PASSWORD")
                   }
               }'''
           s=s.replace('android {',sign,1)
           s=re.sub(r'versionCode\s+\d+','versionCode ${{ github.run_number }}',s,count=1)
           open(p,'w').write(s)
           PY
-      - name: Build debug APK
+            - name: Build debug APK
         working-directory: meeqat-apk/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: meeqat-apk
-          path: meeqat-apk/android/app/build/outputs/apk/debug/app-debug.apk
       - name: Publish GitHub Release (manual run, or [release] in the commit message)
         if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
         env:
@@ -1819,6 +1823,7 @@ jobs:
           INPUT_NOTES: ${{ github.event.inputs.notes }}
         run: |
           cp android/app/build/outputs/apk/debug/app-debug.apk "meeqat-$TAG.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "meeqat.apk"          
           if [ -n "$INPUT_NOTES" ]; then
             NOTES="$INPUT_NOTES"
           else
@@ -1827,4 +1832,4 @@ jobs:
           if [ -z "$NOTES" ]; then NOTES="تحديث جديد لتطبيق ميقات"; fi
           printf '%s\n' "$NOTES" > release-notes.txt
           gh release delete "$TAG" --yes --cleanup-tag >/dev/null 2>&1 || true
-          gh release create "$TAG" "meeqat-$TAG.apk" --title "ميقات $TAG" --notes-file release-notes.txt --target "$GITHUB_SHA"
+          gh release create "$TAG" "meeqat-$TAG.apk" "meeqat.apk" --title "ميقات $TAG" --notes-file release-notes.txt --target "$GITHUB_SHA"
