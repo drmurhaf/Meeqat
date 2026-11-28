@@ -993,6 +993,13 @@ async function repPng(d){
 async function repShare(d){
   const txt=repText(d),ttl=qT("ميقات — تقرير اليوم","Meeqat — Day report");let blob=null;
   try{blob=await repPng(d)}catch(e){}
+  /* تطبيق أندرويد: مشاركة الصورة فقط (بدون نص) عبر نافذة المشاركة الأصلية؛ عند الفشل أو في APK قديم يكمل المسار المعتاد */
+  if(blob&&typeof NATIVE_AD!="undefined"&&NATIVE_AD&&typeof NATIVE_AD.shareImage=="function"){
+    try{
+      const b64=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result||"").split(",")[1]||"");fr.onerror=()=>rej(fr.error);fr.readAsDataURL(blob)});
+      if(b64){await NATIVE_AD.shareImage({name:"meeqat-"+d.k+".png",data:b64});return}
+    }catch(e){}
+  }
   try{
     if(blob&&navigator.canShare&&typeof File=="function"){
       const f=new File([blob],"meeqat-"+d.k+".png",{type:"image/png"});
